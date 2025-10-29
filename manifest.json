@@ -1,6 +1,6 @@
 {
-  "name": "메타몽과부화",
-  "short_name": "메타몽과부화",
+  "name": "메타몽 과부하",
+  "short_name": "메타몽 과부하",
   "description": "메타몽과 함께하는 운동 루틴 기록 앱",
   "start_url": "/",
   "display": "standalone",
