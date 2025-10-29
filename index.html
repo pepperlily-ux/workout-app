@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메타몽 과부하</title>
+    <meta name="description" content="메타몽과 함께하는 점진적 과부하 기록 앱">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <meta name="theme-color" content="#FFFFFF">
+    <!-- 폰트 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quantico:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+    <style>
+        body {
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        /* 스플래시 화면 */
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+        #splash-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .splash-text {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .splash-title {
+            color: black;
+            font-size: 28px;
+            font-family: 'Pretendard', sans-serif;
+            font-weight: 600;
+            line-height: 38px;
+        }
+        .splash-subtitle {
+            color: #847DC4;
+            font-size: 28px;
+            font-family: 'Pretendard', sans-serif;
+            font-weight: 600;
+            line-height: 38px;
+        }
+        .splash-logo {
+            width: 203px;
+            height: 203px;
+            margin-bottom: 80px;
+        }
+        .splash-footer {
+            position: absolute;
+            bottom: 60px;
+            color: #AFAFAF;
+            font-size: 28px;
+            font-family: 'Quantico', sans-serif;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 스플래시 화면 -->
+    <div id="splash-screen">
+        <div class="splash-text">
+            <div class="splash-title">메타몽과 함께하는</div>
+            <div class="splash-subtitle">점진적 과부하</div>
+        </div>
+        <img class="splash-logo" src="icon-512.png" alt="메타몽" />
+        <div class="splash-footer">Lily.</div>
+    </div>
+    
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // 로컬스토리지 키
+        const STORAGE_KEYS = {
+            WORKOUTS: 'workout_exercises',
+            RECORDS: 'workout_records',
+            ROUTINES: 'workout_routines'
+        };
+
+        // 데이터 로드 및 저장 함수
+        const loadData = (key) => {
+            try {
+                const data = localStorage.getItem(key);
+                return data ? JSON.parse(data) : null;
+            } catch {
+                return null;
+            }
+        };
+
+        const saveData = (key, data) => {
+            localStorage.setItem(key, JSON.stringify(data));
+        };
+
+        // 날짜 포맷 함수
+        const formatDate = (date) => {
+            return date.toISOString().split('T')[0];
+        };
+
+        const formatDateKorean = (dateStr) => {
+            const date = new Date(dateStr);
+            const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+            const dayOfWeek = days[date.getDay()];
+            return `${date.getMonth() + 1}월 ${date.getDate()}일 ${dayOfWeek}`;
+        };
+
+        // 메인 앱 컴포넌트
+        function App() {
+            const [currentPage, setCurrentPage] = useState('home');
+            const [exercises, setExercises] = useState(loadData(STORAGE_KEYS.WORKOUTS) || []);
+            const [records, setRecords] = useState(loadData(STORAGE_KEYS.RECORDS) || []);
+            const [routines, setRoutines] = useState(loadData(STORAGE_KEYS.ROUTINES) || []);
+            const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+
+            useEffect(() => {
+                saveData(STORAGE_KEYS.WORKOUTS, exercises);
+            }, [exercises]);
+
+            useEffect(() => {
+                saveData(STORAGE_KEYS.RECORDS, records);
+            }, [records]);
+
+            useEffect(() => {
+                saveData(STORAGE_KEYS.ROUTINES, routines);
+            }, [routines]);
+
+            const addExercise = (exercise) => {
+                setExercises([...exercises, { ...exercise, id: Date.now() }]);
+            };
+
+            const addRoutine = (routine) => {
+                setRoutines([...routines, { ...routine, id: Date.now() }]);
+            };
+
+            const addRecord = (record) => {
+                setRecords([...records, { ...record, id: Date.now() }]);
+            };
+
+            const addRecords = (newRecords) => {
+                const recordsWithIds = newRecords.map((record, index) => ({
+                    ...record,
+                    id: Date.now() + index
+                }));
+                setRecords([...records, ...recordsWithIds]);
+            };
+
+            const updateRecord = (id, updates) => {
+                setRecords(records.map(r => r.id === id ? { ...r, ...updates } : r));
+            };
+
+            const deleteRecord = (id) => {
+                setRecords(records.filter(r => r.id !== id));
+            };
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen bg-white">
+                    {/* 네비게이션 */}
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 max-w-md mx-auto">
+                        <div className="flex justify-around">
+                            <button
+                                onClick={() => setCurrentPage('home')}
+                                className="flex-1 py-3 flex flex-col items-center"
+                            >
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M2 12.2039C2 9.91549 2 8.77128 2.5192 7.82274C3.0384 6.87421 3.98695 6.28551 5.88403 5.10813L7.88403 3.86687C9.88939 2.62229 10.8921 2 12 2C13.1079 2 14.1106 2.62229 16.116 3.86687L18.116 5.10812C20.0131 6.28551 20.9616 6.87421 21.4808 7.82274C22 8.77128 22 9.91549 22 12.2039V13.725C22 17.6258 22 19.5763 20.8284 20.7881C19.6569 22 17.7712 22 14 22H10C6.22876 22 4.34315 22 3.17157 20.7881C2 19.5763 2 17.6258 2 13.725V12.2039Z" stroke={currentPage === 'home' ? '#A295D5' : '#6E6475'} strokeWidth="1.5"/>
+                                    <path d="M9 16C9.85038 16.6303 10.8846 17 12 17C13.1154 17 14.1496 16.6303 15 16" stroke={currentPage === 'home' ? '#A295D5' : '#6E6475'} strokeWidth="1.5" strokeLinecap="round"/>
+                                </svg>
+                                <div className={`text-xs mt-1 ${currentPage === 'home' ? 'text-[#A295D5]' : 'text-[#6E6475]'}`}>홈</div>
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage('calendar')}
+                                className="flex-1 py-3 flex flex-col items-center"
+                            >
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M2 12C2 8.22876 2 6.34315 3.17157 5.17157C4.34315 4 6.22876 4 10 4H14C17.7712 4 19.6569 4 20.8284 5.17157C22 6.34315 22 8.22876 22 12V14C22 17.7712 22 19.6569 20.8284 20.8284C19.6569 22 17.7712 22 14 22H10C6.22876 22 4.34315 22 3.17157 20.8284C2 19.6569 2 17.7712 2 14V12Z" stroke={currentPage === 'calendar' ? '#A295D5' : '#6E6475'} strokeWidth="1.5"/>
+                                    <path d="M7 4V2.5" stroke={currentPage === 'calendar' ? '#A295D5' : '#6E6475'} strokeWidth="1.5" strokeLinecap="round"/>
+                                    <path d="M17 4V2.5" stroke={currentPage === 'calendar' ? '#A295D5' : '#6E6475'} strokeWidth="1.5" strokeLinecap="round"/>
+                                    <path d="M2.5 9H21.5" stroke={currentPage === 'calendar' ? '#A295D5' : '#6E6475'} strokeWidth="1.5" strokeLinecap="round"/>
+                                    <path d="M18 17C18 17.5523 17.5523 18 17 18C16.4477 18 16 17.5523 16 17C16 16.4477 16.4477 16 17 16C17.5523 16 18 16.4477 18 17Z" fill={currentPage === 'calendar' ? '#A295D5' : '#6E6475'}/>
+                                    <path d="M18 13C18 13.5523 17.5523 14 17 14C16.4477 14 16 13.5523 16 13C16 12.4477 16.4477 12 17 12C17.5523 12 18 12.4477 18 13Z" fill={currentPage === 'calendar' ? '#A295D5' : '#6E6475'}/>
+                                    <path d="M13 17C13 17.5523 12.5523 18 12 18C11.4477 18 11 17.5523 11 17C11 16.4477 11.4477 16 12 16C12.5523 16 13 16.4477 13 17Z" fill={currentPage === 'calendar' ? '#A295D5' : '#6E6475'}/>
+                                    <path d="M13 13C13 13.5523 12.5523 14 12 14C11.4477 14 11 13.5523 11 13C11 12.4477 11.4477 12 12 12C12.5523 12 13 12.4477 13 13Z" fill={currentPage === 'calendar' ? '#A295D5' : '#6E6475'}/>
+                                    <path d="M8 17C8 17.5523 7.55228 18 7 18C6.44772 18 6 17.5523 6 17C6 16.4477 6.44772 16 7 16C7.55228 16 8 16.4477 8 17Z" fill={currentPage === 'calendar' ? '#A295D5' : '#6E6475'}/>
+                                    <path d="M8 13C8 13.5523 7.55228 14 7 14C6.44772 14 6 13.5523 6 13C6 12.4477 6.44772 12 7 12C7.55228 12 8 12.4477 8 13Z" fill={currentPage === 'calendar' ? '#A295D5' : '#6E6475'}/>
+                                </svg>
+                                <div className={`text-xs mt-1 ${currentPage === 'calendar' ? 'text-[#A295D5]' : 'text-[#6E6475]'}`}>캘린더</div>
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage('routines')}
+                                className="flex-1 py-3 flex flex-col items-center"
+                            >
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M20 15.6818V11.1878C20 7.32802 20 5.39814 18.8284 4.19907C17.6569 3 15.7712 3 12 3C8.22876 3 6.34315 3 5.17157 4.19907C4 5.39814 4 7.32802 4 11.1878V15.6818C4 18.4687 4 19.8622 4.65254 20.4711C4.96375 20.7615 5.35658 20.9439 5.77504 20.9924C6.65246 21.094 7.6771 20.1764 9.72636 18.3412C10.6322 17.53 11.0851 17.1244 11.6091 17.0176C11.8672 16.9649 12.1328 16.9649 12.3909 17.0176C12.9149 17.1244 13.3678 17.53 14.2736 18.3412C16.3229 20.1764 17.3475 21.094 18.225 20.9924C18.6434 20.9439 19.0363 20.7615 19.3475 20.4711C20 19.8622 20 18.4687 20 15.6818Z" stroke={currentPage === 'routines' ? '#A295D5' : '#6E6475'} strokeWidth="1.5"/>
+                                    <path d="M15 7H9" stroke={currentPage === 'routines' ? '#A295D5' : '#6E6475'} strokeWidth="2" strokeLinecap="round"/>
+                                </svg>
+                                <div className={`text-xs mt-1 ${currentPage === 'routines' ? 'text-[#A295D5]' : 'text-[#6E6475]'}`}>루틴</div>
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage('exercises')}
+                                className="flex-1 py-3 flex flex-col items-center"
+                            >
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3.92443 18.6073L4.45475 18.077L3.92443 18.6073ZM5.39271 20.0756L4.86238 20.6059L5.39271 20.0756ZM9.06343 20.0756L8.5331 20.6059H8.5331L9.06343 20.0756ZM9.79757 20.8097L10.3279 20.2794L10.3279 20.2794L9.79757 20.8097ZM14.6055 19.3774L13.8811 19.1833L13.8811 19.1833L14.6055 19.3774ZM14.6055 18.5713L13.8811 18.7654L14.6055 18.5713ZM12.036 21.9469L11.8419 21.2225H11.8419L12.036 21.9469ZM11.2299 21.9469L11.424 21.2225L11.2299 21.9469ZM2.05306 11.964L2.77751 12.1581V12.1581L2.05306 11.964ZM3.19028 14.2024L2.65995 14.7328L3.19028 14.2024ZM2.05306 12.7701L1.32862 12.9643L2.05306 12.7701ZM4.62257 9.3945L4.81668 10.1189H4.81668L4.62257 9.3945ZM5.42871 9.3945L5.62283 8.67005V8.67005L5.42871 9.3945ZM20.0756 9.06343L19.5452 9.59376L20.0756 9.06343ZM20.8097 9.79757L21.34 9.26724L20.8097 9.79757ZM19.3774 14.6055L19.1833 13.8811H19.1833L19.3774 14.6055ZM18.5713 14.6055L18.7654 13.8811L18.7654 13.8811L18.5713 14.6055ZM21.9469 12.036L21.2225 11.8419L21.2225 11.8419L21.9469 12.036ZM21.9469 11.2299L21.2225 11.424L21.2225 11.424L21.9469 11.2299ZM11.964 2.05307L11.7699 1.32862V1.32862L11.964 2.05307ZM14.2024 3.19028L13.6721 3.72061L14.2024 3.19028ZM12.7701 2.05307L12.576 2.77751V2.77751L12.7701 2.05307ZM9.3945 4.62257L8.67005 4.42845V4.42845L9.3945 4.62257ZM9.3945 5.42871L10.1189 5.2346V5.2346L9.3945 5.42871ZM7.02426 16.9757C7.31715 17.2686 7.31715 17.7435 7.02426 18.0364C6.73136 18.3293 6.25649 18.3293 5.9636 18.0364L6.49393 17.5061L7.02426 16.9757ZM18.0364 5.9636C18.3293 6.25649 18.3293 6.73136 18.0364 7.02426C17.7435 7.31715 17.2686 7.31715 16.9757 7.02426L17.5061 6.49393L18.0364 5.9636ZM11.6329 7.96221L12.1633 7.43188L11.6329 7.96221ZM3.92443 18.6073L4.45475 18.077L5.92304 19.5452L5.39271 20.0756L4.86238 20.6059L3.39409 19.1376L3.92443 18.6073ZM20.0756 5.39271L19.5452 5.92304L18.077 4.45475L18.6073 3.92442L19.1376 3.39409L20.6059 4.86238L20.0756 5.39271ZM20.0756 8.32928L19.5452 7.79895C19.9063 7.43788 20.1226 7.2193 20.258 7.04192C20.3203 6.96028 20.346 6.9114 20.3567 6.88584C20.3649 6.86626 20.3638 6.86179 20.3638 6.861H21.1138L21.8638 6.861C21.8638 7.30594 21.6745 7.65828 21.4505 7.95179C21.2398 8.22799 20.937 8.52853 20.6059 8.85961L20.0756 8.32928ZM20.0756 5.39271L20.6059 4.86238C20.937 5.19347 21.2398 5.49401 21.4505 5.77021C21.6745 6.06372 21.8638 6.41605 21.8638 6.861L21.1138 6.861H20.3638C20.3638 6.8602 20.3649 6.85573 20.3567 6.83615C20.346 6.8106 20.3203 6.76171 20.258 6.68008C20.1226 6.50269 19.9063 6.28411 19.5452 5.92304L20.0756 5.39271ZM5.39271 20.0756L5.92304 19.5452C6.28411 19.9063 6.50269 20.1226 6.68008 20.258C6.76171 20.3203 6.8106 20.346 6.83615 20.3567C6.85573 20.3649 6.8602 20.3638 6.861 20.3638L6.861 21.1138L6.861 21.8638C6.41605 21.8638 6.06372 21.6745 5.77021 21.4505C5.49401 21.2398 5.19347 20.937 4.86238 20.6059L5.39271 20.0756ZM8.32928 20.0756L8.85961 20.6059C8.52853 20.937 8.22799 21.2398 7.95179 21.4505C7.65828 21.6745 7.30594 21.8638 6.861 21.8638L6.861 21.1138L6.861 20.3638C6.86179 20.3638 6.86626 20.3649 6.88584 20.3567C6.9114 20.346 6.96028 20.3203 7.04191 20.258C7.2193 20.1226 7.43788 19.9063 7.79895 19.5452L8.32928 20.0756ZM3.92443 15.6707L4.45475 16.201C4.09368 16.5621 3.87736 16.7807 3.74201 16.9581C3.67973 17.0397 3.65396 17.0886 3.6433 17.1142C3.63513 17.1337 3.63619 17.1382 3.63619 17.139L2.88619 17.139L2.13619 17.139C2.13619 16.6941 2.32554 16.3417 2.54948 16.0482C2.76022 15.772 3.06301 15.4715 3.39409 15.1404L3.92443 15.6707ZM3.92443 18.6073L3.39409 19.1376C3.06301 18.8065 2.76022 18.506 2.54948 18.2298C2.32554 17.9363 2.13619 17.5839 2.13619 17.139L2.88619 17.139L3.63619 17.139C3.63619 17.1398 3.63513 17.1443 3.6433 17.1638C3.65396 17.1894 3.67973 17.2383 3.74201 17.3199C3.87736 17.4973 4.09368 17.7159 4.45475 18.077L3.92443 18.6073ZM15.6707 3.92442L15.1404 3.39409C15.4715 3.06301 15.772 2.76022 16.0482 2.54948C16.3417 2.32554 16.6941 2.13619 17.139 2.13619L17.139 2.88619V3.63619C17.1382 3.63619 17.1337 3.63513 17.1142 3.6433C17.0886 3.65396 17.0397 3.67973 16.9581 3.74201C16.7807 3.87736 16.5621 4.09368 16.201 4.45475L15.6707 3.92442ZM18.6073 3.92442L18.077 4.45475C17.7159 4.09368 17.4973 3.87736 17.3199 3.74201C17.2383 3.67973 17.1894 3.65396 17.1638 3.6433C17.1443 3.63513 17.1398 3.63619 17.139 3.63619V2.88619L17.139 2.13619C17.5839 2.13619 17.9363 2.32554 18.2298 2.54948C18.506 2.76022 18.8065 3.06301 19.1376 3.39409L18.6073 3.92442ZM9.06343 20.0756L9.59376 19.5452L10.3279 20.2794L9.79757 20.8097L9.26724 21.34L8.5331 20.6059L9.06343 20.0756ZM13.4683 20.8097L12.938 20.2794C13.2908 19.9266 13.5194 19.6969 13.6777 19.5071C13.8292 19.3253 13.8669 19.2363 13.8811 19.1833L14.6055 19.3774L15.3299 19.5715C15.2361 19.9216 15.0482 20.2057 14.8297 20.4677C14.6179 20.7218 14.3319 21.0067 13.9986 21.34L13.4683 20.8097ZM13.4683 17.139L13.9986 16.6087C14.3319 16.942 14.6179 17.2269 14.8297 17.481C15.0482 17.743 15.2361 18.0271 15.3299 18.3772L14.6055 18.5713L13.8811 18.7654C13.8669 18.7124 13.8292 18.6234 13.6777 18.4416C13.5194 18.2518 13.2908 18.0222 12.938 17.6693L13.4683 17.139ZM14.6055 19.3774L13.8811 19.1833C13.9177 19.0464 13.9177 18.9023 13.8811 18.7654L14.6055 18.5713L15.3299 18.3772C15.4348 18.7684 15.4348 19.1803 15.3299 19.5715L14.6055 19.3774ZM13.4683 20.8097L13.9986 21.34C13.6653 21.6734 13.3804 21.9593 13.1263 22.1712C12.8643 22.3896 12.5802 22.5776 12.2301 22.6714L12.036 21.9469L11.8419 21.2225C11.8949 21.2083 11.9839 21.1707 12.1657 21.0191C12.3555 20.8609 12.5851 20.6322 12.938 20.2794L13.4683 20.8097ZM9.79757 20.8097L10.3279 20.2794C10.6807 20.6322 10.9104 20.8609 11.1002 21.0191C11.282 21.1707 11.371 21.2083 11.424 21.2225L11.2299 21.9469L11.0357 22.6714C10.6857 22.5776 10.4016 22.3896 10.1396 22.1712C9.88548 21.9593 9.60055 21.6734 9.26724 21.34L9.79757 20.8097ZM12.036 21.9469L12.2301 22.6714C11.8389 22.7762 11.427 22.7762 11.0357 22.6714L11.2299 21.9469L11.424 21.2225C11.5609 21.2592 11.705 21.2592 11.8419 21.2225L12.036 21.9469ZM3.19028 10.5317L3.72061 11.062C3.36778 11.4149 3.13912 11.6445 2.98091 11.8343C2.82932 12.0161 2.79171 12.1051 2.77751 12.1581L2.05306 11.964L1.32862 11.7699C1.42242 11.4198 1.61035 11.1357 1.82884 10.8737C2.04069 10.6196 2.32664 10.3347 2.65995 10.0014L3.19028 10.5317ZM3.19028 14.2024L2.65995 14.7328C2.32664 14.3994 2.04069 14.1145 1.82884 13.8604C1.61035 13.5984 1.42242 13.3143 1.32862 12.9643L2.05306 12.7701L2.77751 12.576C2.79171 12.629 2.82932 12.718 2.98091 12.8998C3.13912 13.0896 3.36778 13.3193 3.72061 13.6721L3.19028 14.2024ZM2.05306 11.964L2.77751 12.1581C2.74083 12.295 2.74083 12.4391 2.77751 12.576L2.05306 12.7701L1.32862 12.9643C1.22379 12.573 1.22379 12.1611 1.32862 11.7699L2.05306 11.964ZM3.19028 10.5317L2.65995 10.0014C2.99326 9.66807 3.27819 9.38212 3.53228 9.17027C3.79432 8.95178 4.07838 8.76385 4.42845 8.67005L4.62257 9.3945L4.81668 10.1189C4.76368 10.1331 4.67467 10.1708 4.49287 10.3223C4.30312 10.4806 4.07344 10.7092 3.72061 11.062L3.19028 10.5317ZM6.861 10.5317L6.33067 11.062C5.97784 10.7092 5.74816 10.4806 5.55841 10.3223C5.37661 10.1708 5.2876 10.1331 5.2346 10.1189L5.42871 9.3945L5.62283 8.67005C5.9729 8.76385 6.25696 8.95178 6.519 9.17027C6.77308 9.38212 7.05802 9.66807 7.39133 10.0014L6.861 10.5317ZM4.62257 9.3945L4.42845 8.67005C4.81968 8.56522 5.2316 8.56523 5.62283 8.67005L5.42871 9.3945L5.2346 10.1189C5.09771 10.0823 4.95357 10.0823 4.81668 10.1189L4.62257 9.3945ZM20.0756 9.06343L20.6059 8.5331L21.34 9.26724L20.8097 9.79757L20.2794 10.3279L19.5452 9.59376L20.0756 9.06343ZM20.8097 13.4683L21.34 13.9986C21.0067 14.3319 20.7218 14.6179 20.4677 14.8297C20.2057 15.0482 19.9216 15.2361 19.5715 15.3299L19.3774 14.6055L19.1833 13.8811C19.2363 13.8669 19.3253 13.8292 19.5071 13.6777C19.6969 13.5194 19.9266 13.2908 20.2794 12.938L20.8097 13.4683ZM17.139 13.4683L17.6693 12.938C18.0222 13.2908 18.2518 13.5194 18.4416 13.6777C18.6234 13.8292 18.7124 13.8669 18.7654 13.8811L18.5713 14.6055L18.3772 15.3299C18.0271 15.2361 17.743 15.0482 17.481 14.8297C17.2269 14.6179 16.942 14.3319 16.6087 13.9986L17.139 13.4683ZM19.3774 14.6055L19.5715 15.3299C19.1803 15.4348 18.7684 15.4348 18.3772 15.3299L18.5713 14.6055L18.7654 13.8811C18.9023 13.9177 19.0464 13.9177 19.1833 13.8811L19.3774 14.6055ZM20.8097 13.4683L20.2794 12.938C20.6322 12.5851 20.8609 12.3555 21.0191 12.1657C21.1707 11.9839 21.2083 11.8949 21.2225 11.8419L21.9469 12.036L22.6714 12.2301C22.5776 12.5802 22.3896 12.8643 22.1712 13.1263C21.9593 13.3804 21.6734 13.6653 21.34 13.9986L20.8097 13.4683ZM20.8097 9.79757L21.34 9.26724C21.6734 9.60055 21.9593 9.88548 22.1712 10.1396C22.3896 10.4016 22.5776 10.6857 22.6714 11.0357L21.9469 11.2299L21.2225 11.424C21.2083 11.371 21.1707 11.282 21.0191 11.1002C20.8609 10.9104 20.6322 10.6807 20.2794 10.3279L20.8097 9.79757ZM21.9469 12.036L21.2225 11.8419C21.2592 11.705 21.2592 11.5609 21.2225 11.424L21.9469 11.2299L22.6714 11.0357C22.7762 11.427 22.7762 11.8389 22.6714 12.2301L21.9469 12.036ZM10.5317 3.19028L10.0014 2.65995C10.3347 2.32664 10.6196 2.04069 10.8737 1.82884C11.1357 1.61035 11.4198 1.42242 11.7699 1.32862L11.964 2.05307L12.1581 2.77751C12.1051 2.79171 12.0161 2.82932 11.8343 2.98091C11.6445 3.13912 11.4149 3.36778 11.062 3.72061L10.5317 3.19028ZM14.2024 3.19028L13.6721 3.72061C13.3193 3.36778 13.0896 3.13912 12.8998 2.98091C12.718 2.82932 12.629 2.79171 12.576 2.77751L12.7701 2.05307L12.9643 1.32862C13.3143 1.42242 13.5984 1.61035 13.8604 1.82884C14.1145 2.04069 14.3994 2.32664 14.7328 2.65995L14.2024 3.19028ZM11.964 2.05307L11.7699 1.32862C12.1611 1.22379 12.573 1.22379 12.9643 1.32862L12.7701 2.05307L12.576 2.77751C12.4391 2.74083 12.295 2.74083 12.1581 2.77751L11.964 2.05307ZM10.5317 3.19028L11.062 3.72061C10.7092 4.07344 10.4806 4.30312 10.3223 4.49287C10.1708 4.67467 10.1331 4.76368 10.1189 4.81668L9.3945 4.62257L8.67005 4.42845C8.76385 4.07838 8.95178 3.79432 9.17027 3.53228C9.38212 3.27819 9.66807 2.99326 10.0014 2.65995L10.5317 3.19028ZM10.5317 6.861L10.0014 7.39133C9.66807 7.05802 9.38212 6.77308 9.17027 6.519C8.95178 6.25696 8.76386 5.9729 8.67005 5.62283L9.3945 5.42871L10.1189 5.2346C10.1331 5.2876 10.1708 5.37661 10.3223 5.55841C10.4806 5.74816 10.7092 5.97784 11.062 6.33067L10.5317 6.861ZM9.3945 4.62257L10.1189 4.81668C10.0823 4.95357 10.0823 5.0977 10.1189 5.2346L9.3945 5.42871L8.67005 5.62283C8.56523 5.2316 8.56522 4.81968 8.67005 4.42845L9.3945 4.62257ZM3.19028 14.2024L3.72061 13.6721L7.02426 16.9757L6.49393 17.5061L5.9636 18.0364L2.65995 14.7328L3.19028 14.2024ZM14.2024 3.19028L14.7328 2.65995L18.0364 5.9636L17.5061 6.49393L16.9757 7.02426L13.6721 3.72061L14.2024 3.19028ZM13.4683 17.139L12.938 17.6693L11.8367 16.5681L12.3671 16.0378L12.8974 15.5075L13.9986 16.6087L13.4683 17.139ZM12.3671 16.0378L11.8367 15.5075L15.5075 11.8367L16.0378 12.3671L16.5681 12.8974L12.8974 16.5681L12.3671 16.0378ZM17.139 13.4683L16.6087 13.9986L15.5075 12.8974L16.0378 12.3671L16.5681 11.8367L17.6693 12.938L17.139 13.4683ZM12.3671 16.0378L11.8367 16.5681L7.43188 12.1633L7.96221 11.6329L8.49254 11.1026L12.8974 15.5075L12.3671 16.0378ZM7.96221 11.6329L7.43188 12.1633L6.33067 11.062L6.861 10.5317L7.39133 10.0014L8.49254 11.1026L7.96221 11.6329ZM11.6329 7.96221L12.1633 8.49254L8.49254 12.1633L7.96221 11.6329L7.43188 11.1026L11.1026 7.43188L11.6329 7.96221ZM16.0378 12.3671L15.5075 12.8974L11.1026 8.49254L11.6329 7.96221L12.1633 7.43188L16.5681 11.8367L16.0378 12.3671ZM11.6329 7.96221L11.1026 8.49254L10.0014 7.39133L10.5317 6.861L11.062 6.33067L12.1633 7.43188L11.6329 7.96221ZM20.0756 9.06343L19.5452 9.59376C19.0496 9.09814 19.0496 8.29458 19.5452 7.79895L20.0756 8.32928L20.6059 8.85961C20.6961 8.76945 20.6961 8.62326 20.6059 8.5331L20.0756 9.06343ZM9.06343 20.0756L8.5331 20.6059C8.62326 20.6961 8.76945 20.6961 8.85961 20.6059L8.32928 20.0756L7.79895 19.5452C8.29457 19.0496 9.09814 19.0496 9.59376 19.5452L9.06343 20.0756Z" fill={currentPage === 'exercises' ? '#A295D5' : '#6E6475'}/>
+                                </svg>
+                                <div className={`text-xs mt-1 ${currentPage === 'exercises' ? 'text-[#A295D5]' : 'text-[#6E6475]'}`}>운동</div>
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* 페이지 렌더링 */}
+                    <div className="pb-20">
+                        {currentPage === 'home' && (
+                            <HomePage
+                                exercises={exercises}
+                                records={records}
+                                routines={routines}
+                                selectedDate={selectedDate}
+                                setSelectedDate={setSelectedDate}
+                                addRecord={addRecord}
+                                addRecords={addRecords}
+                                updateRecord={updateRecord}
+                                deleteRecord={deleteRecord}
+                            />
+                        )}
+                        {currentPage === 'calendar' && (
+                            <CalendarPage
+                                records={records}
+                                exercises={exercises}
+                                setCurrentPage={setCurrentPage}
+                                setSelectedDate={setSelectedDate}
+                            />
+                        )}
+                        {currentPage === 'routines' && (
+                            <RoutinesPage
+                                routines={routines}
+                                exercises={exercises}
+                                addRoutine={addRoutine}
+                                setCurrentPage={setCurrentPage}
+                                setRoutines={setRoutines}
+                            />
+                        )}
+                        {currentPage === 'exercises' && (
+                            <ExercisesPage
+                                exercises={exercises}
+                                addExercise={addExercise}
+                                records={records}
+                                setExercises={setExercises}
+                            />
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // 홈 페이지
+        function HomePage({ exercises, records, routines, selectedDate, setSelectedDate, addRecord, addRecords, updateRecord, deleteRecord }) {
+            const [selectedRoutine, setSelectedRoutine] = useState(null);
+            const [dateRecords, setDateRecords] = useState([]);
+            const [showRoutineModal, setShowRoutineModal] = useState(false);
+            const [showExerciseModal, setShowExerciseModal] = useState(false);
+            const dateInputRef = React.useRef(null);
+            const [checkedSets, setCheckedSets] = useState({});
+
+            useEffect(() => {
+                const recordsForDate = records.filter(r => r.date === selectedDate);
+                setDateRecords(recordsForDate);
+            }, [records, selectedDate]);
+
+            // 볼륨 계산
+            const calculateVolume = (sets) => {
+                return sets.reduce((total, set) => total + (set.weight * set.reps), 0);
+            };
+
+            // 각 운동의 직전 기록 대비 성장률 계산
+            const getExerciseGrowth = (exerciseId) => {
+                const todayRecord = dateRecords.find(r => r.exerciseId === exerciseId);
+                if (!todayRecord || !todayRecord.sets || todayRecord.sets.length === 0) return null;
+
+                const previousRecords = records
+                    .filter(r => r.exerciseId === exerciseId && r.date < selectedDate && r.sets && r.sets.length > 0)
+                    .sort((a, b) => b.date.localeCompare(a.date));
+
+                if (previousRecords.length === 0) return null;
+
+                const todayVolume = calculateVolume(todayRecord.sets);
+                const previousVolume = calculateVolume(previousRecords[0].sets);
+
+                if (previousVolume === 0) return null;
+
+                const growth = ((todayVolume - previousVolume) / previousVolume) * 100;
+                return { growth, previousDate: previousRecords[0].date };
+            };
+
+            // 루틴 전체 성장률 계산 (공통 운동 3개 이상일 때)
+            const getRoutineGrowth = () => {
+                // 운동 기록이 없거나, 세트가 있는 운동이 없으면 null 반환
+                const recordsWithSets = dateRecords.filter(r => r.sets && r.sets.length > 0);
+                if (recordsWithSets.length === 0) return null;
+
+                const currentExerciseIds = recordsWithSets.map(r => r.exerciseId).sort();
+
+                // 과거 날짜들을 순회
+                const dates = [...new Set(records.map(r => r.date))].filter(d => d < selectedDate).sort().reverse();
+                
+                for (const date of dates) {
+                    const pastDateRecords = records.filter(r => r.date === date);
+                    const pastExerciseIds = pastDateRecords.map(r => r.exerciseId).sort();
+                    
+                    // 공통 운동 찾기
+                    const commonExerciseIds = currentExerciseIds.filter(id => pastExerciseIds.includes(id));
+                    
+                    if (commonExerciseIds.length === 0) continue;
+                    
+                    // 조건 1: 완전히 동일한 운동 조합 (개수와 종류 모두 같음)
+                    const isExactMatch = currentExerciseIds.length === pastExerciseIds.length && 
+                                        currentExerciseIds.length === commonExerciseIds.length;
+                    
+                    // 조건 2: 부분적으로 겹치지만 공통 운동이 2개 이상
+                    const hasEnoughCommon = !isExactMatch && commonExerciseIds.length >= 2;
+                    
+                    // 둘 중 하나라도 만족하면 비교
+                    if (isExactMatch || hasEnoughCommon) {
+                        // 현재 날짜 공통 운동들의 볼륨 계산
+                        const currentCommonVolume = recordsWithSets
+                            .filter(r => commonExerciseIds.includes(r.exerciseId))
+                            .reduce((total, record) => {
+                                return total + calculateVolume(record.sets);
+                            }, 0);
+
+                        // 과거 공통 운동들의 볼륨 계산
+                        const previousCommonVolume = pastDateRecords
+                            .filter(r => commonExerciseIds.includes(r.exerciseId) && r.sets && r.sets.length > 0)
+                            .reduce((total, record) => {
+                                return total + calculateVolume(record.sets);
+                            }, 0);
+
+                        if (previousCommonVolume === 0 || currentCommonVolume === 0) continue;
+
+                        const growth = ((currentCommonVolume - previousCommonVolume) / previousCommonVolume) * 100;
+                        return { growth, previousDate: date, commonCount: commonExerciseIds.length };
+                    }
+                }
+
+                return null;
+            };
+
+            // 성장률에 따른 메시지 반환
+            const getGrowthMessage = (growth) => {
+                if (growth < -5) return '오늘은 퇴보하는 날이었네요';
+                if (growth >= -4.9 && growth <= 0) return '오늘은 성장하지 못했습니다';
+                if (growth > 0 && growth < 1.5) return '미세하지만 좋은 시도였습니다';
+                if (growth >= 1.5 && growth < 3) return '최적의 구간! 근육이 자라나고 있습니다';
+                if (growth >= 3 && growth < 5) return '엄청난 성장을 이루었군요! 휴식이 필요해요.';
+                if (growth >= 5) return '대단해요! 너무 무리하시는거 아니에요?';
+                return '';
+            };
+
+            const routineGrowth = getRoutineGrowth();
+
+            const handleRoutineSelect = (routine) => {
+                setSelectedRoutine(routine);
+                // 루틴의 운동들을 오늘 기록에 한 번에 추가
+                const newRecords = routine.exerciseIds
+                    .filter(exerciseId => !dateRecords.find(r => r.exerciseId === exerciseId))
+                    .map(exerciseId => ({
+                        date: selectedDate,
+                        exerciseId: exerciseId,
+                        sets: []
+                    }));
+                
+                if (newRecords.length > 0) {
+                    addRecords(newRecords);
+                }
+                setShowRoutineModal(false);
+            };
+
+            const handleExerciseSelect = (exerciseId) => {
+                const exists = dateRecords.find(r => r.exerciseId === exerciseId);
+                if (!exists) {
+                    addRecord({
+                        date: selectedDate,
+                        exerciseId: exerciseId,
+                        sets: []
+                    });
+                }
+                setShowExerciseModal(false);
+            };
+
+            const addSet = (recordId) => {
+                const record = dateRecords.find(r => r.id === recordId);
+                let defaultSet = { weight: 0, reps: 0 };
+                
+                // 이미 세트가 있으면 마지막 세트 복사 (기존 로직 유지)
+                if (record.sets && record.sets.length > 0) {
+                    const lastSet = record.sets[record.sets.length - 1];
+                    defaultSet = { weight: lastSet.weight, reps: lastSet.reps };
+                } else {
+                    // 첫 세트 추가할 때만 직전 기록에서 가져오기
+                    const previousRecords = records
+                        .filter(r => r.exerciseId === record.exerciseId && r.date < selectedDate && r.sets && r.sets.length > 0)
+                        .sort((a, b) => b.date.localeCompare(a.date));
+                    
+                    if (previousRecords.length > 0 && previousRecords[0].sets.length > 0) {
+                        const previousFirstSet = previousRecords[0].sets[0];
+                        defaultSet = { weight: previousFirstSet.weight, reps: previousFirstSet.reps };
+                    }
+                }
+                
+                const newSets = [...(record.sets || []), defaultSet];
+                updateRecord(recordId, { sets: newSets });
+            };
+
+            const updateSet = (recordId, setIndex, field, value) => {
+                const record = dateRecords.find(r => r.id === recordId);
+                const newSets = [...record.sets];
+                newSets[setIndex] = { ...newSets[setIndex], [field]: parseFloat(value) || 0 };
+                updateRecord(recordId, { sets: newSets });
+            };
+
+            const removeSet = (recordId, setIndex) => {
+                const record = dateRecords.find(r => r.id === recordId);
+                const newSets = record.sets.filter((_, i) => i !== setIndex);
+                updateRecord(recordId, { sets: newSets });
+            };
+
+            const toggleSetCheck = (recordId, setIndex) => {
+                const key = `${recordId}-${setIndex}`;
+                setCheckedSets(prev => ({
+                    ...prev,
+                    [key]: !prev[key]
+                }));
+            };
+
+            return (
+                <div className="p-4">
+                    {/* 날짜 표시 */}
+                    <div className="mb-4 flex items-center justify-between">
+                        <h1 className="text-2xl font-bold text-gray-800">
+                            {formatDateKorean(selectedDate)}
+                        </h1>
+                        <button
+                            onClick={() => dateInputRef.current?.showPicker()}
+                            className="p-2"
+                        >
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M2 12C2 8.22876 2 6.34315 3.17157 5.17157C4.34315 4 6.22876 4 10 4H14C17.7712 4 19.6569 4 20.8284 5.17157C22 6.34315 22 8.22876 22 12V14C22 17.7712 22 19.6569 20.8284 20.8284C19.6569 22 17.7712 22 14 22H10C6.22876 22 4.34315 22 3.17157 20.8284C2 19.6569 2 17.7712 2 14V12Z" stroke="#6E6475" strokeWidth="1.5"/>
+                                <path d="M7 4V2.5" stroke="#6E6475" strokeWidth="1.5" strokeLinecap="round"/>
+                                <path d="M17 4V2.5" stroke="#6E6475" strokeWidth="1.5" strokeLinecap="round"/>
+                                <path d="M2.5 9H21.5" stroke="#6E6475" strokeWidth="1.5" strokeLinecap="round"/>
+                                <path d="M18 17C18 17.5523 17.5523 18 17 18C16.4477 18 16 17.5523 16 17C16 16.4477 16.4477 16 17 16C17.5523 16 18 16.4477 18 17Z" fill="#6E6475"/>
+                                <path d="M18 13C18 13.5523 17.5523 14 17 14C16.4477 14 16 13.5523 16 13C16 12.4477 16.4477 12 17 12C17.5523 12 18 12.4477 18 13Z" fill="#6E6475"/>
+                                <path d="M13 17C13 17.5523 12.5523 18 12 18C11.4477 18 11 17.5523 11 17C11 16.4477 11.4477 16 12 16C12.5523 16 13 16.4477 13 17Z" fill="#6E6475"/>
+                                <path d="M13 13C13 13.5523 12.5523 14 12 14C11.4477 14 11 13.5523 11 13C11 12.4477 11.4477 12 12 12C12.5523 12 13 12.4477 13 13Z" fill="#6E6475"/>
+                                <path d="M8 17C8 17.5523 7.55228 18 7 18C6.44772 18 6 17.5523 6 17C6 16.4477 6.44772 16 7 16C7.55228 16 8 16.4477 8 17Z" fill="#6E6475"/>
+                                <path d="M8 13C8 13.5523 7.55228 14 7 14C6.44772 14 6 13.5523 6 13C6 12.4477 6.44772 12 7 12C7.55228 12 8 12.4477 8 13Z" fill="#6E6475"/>
+                            </svg>
+                        </button>
+                        <input
+                            ref={dateInputRef}
+                            type="date"
+                            value={selectedDate}
+                            max={formatDate(new Date())}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="hidden"
+                        />
+                    </div>
+
+                    {/* 루틴 성장률 */}
+                    {routineGrowth && (
+                        <div className={`mb-4 p-4 rounded-lg border ${
+                            routineGrowth.growth > 0
+                                ? 'bg-[#FAFFFB] border-[#78D2A8]'
+                                : routineGrowth.growth === 0
+                                    ? 'bg-[#F3F1FA] border-[#D4CDEB]'
+                                    : 'bg-[#FFF9FA] border-[#F06B8A]'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="text-base font-medium text-gray-700">
+                                    {getGrowthMessage(routineGrowth.growth)}
+                                </div>
+                                <span className={`text-lg font-bold ml-3 ${
+                                    routineGrowth.growth > 0
+                                        ? 'text-[#2D9C61]'
+                                        : routineGrowth.growth === 0
+                                            ? 'text-[#847DC4]'
+                                            : 'text-[#E75D7D]'
+                                }`}>
+                                    {routineGrowth.growth >= 0 ? '+' : ''}{routineGrowth.growth.toFixed(1)}%
+                                </span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                                vs {formatDateKorean(routineGrowth.previousDate)} · {routineGrowth.commonCount}개 운동 비교
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 운동 추가 버튼 */}
+                    <div className="flex gap-2 mb-4">
+                        <button
+                            onClick={() => setShowRoutineModal(true)}
+                            className="flex-1 bg-white text-[#847DC4] py-3 rounded font-normal text-sm border border-[#8881CE]"
+                        >
+                            루틴 선택
+                        </button>
+                        <button
+                            onClick={() => setShowExerciseModal(true)}
+                            className="flex-1 bg-[#A295D5] text-white py-3 rounded font-normal text-sm"
+                        >
+                            운동 추가
+                        </button>
+                    </div>
+
+                    {/* 오늘의 운동 기록 */}
+                    <div className="space-y-4">
+                        {dateRecords.map(record => {
+                            const exercise = exercises.find(e => e.id === record.exerciseId);
+                            if (!exercise) return null;
+
+                            const growth = getExerciseGrowth(exercise.id);
+
+                            return (
+                                <div key={record.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                                    {/* 운동 헤더 */}
+                                    <div className="flex items-center mb-3">
+                                        <h3 className="text-lg font-bold text-gray-800">{exercise.name}</h3>
+                                        <button
+                                            onClick={() => deleteRecord(record.id)}
+                                            className="ml-2"
+                                        >
+                                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M13.75 10C13.75 10.1658 13.6842 10.3247 13.5669 10.4419C13.4497 10.5592 13.2908 10.625 13.125 10.625H6.875C6.70924 10.625 6.55027 10.5592 6.43306 10.4419C6.31585 10.3247 6.25 10.1658 6.25 10C6.25 9.83424 6.31585 9.67527 6.43306 9.55806C6.55027 9.44085 6.70924 9.375 6.875 9.375H13.125C13.2908 9.375 13.4497 9.44085 13.5669 9.55806C13.6842 9.67527 13.75 9.83424 13.75 10ZM18.125 10C18.125 11.607 17.6485 13.1779 16.7557 14.514C15.8629 15.8502 14.594 16.8916 13.1093 17.5065C11.6247 18.1215 9.99099 18.2824 8.41489 17.9689C6.8388 17.6554 5.39106 16.8815 4.25476 15.7452C3.11846 14.6089 2.34463 13.1612 2.03112 11.5851C1.71762 10.009 1.87852 8.37535 2.49348 6.8907C3.10844 5.40605 4.14985 4.1371 5.486 3.24431C6.82214 2.35152 8.39303 1.875 10 1.875C12.1542 1.87727 14.2195 2.73403 15.7427 4.25727C17.266 5.78051 18.1227 7.84581 18.125 10ZM16.875 10C16.875 8.64025 16.4718 7.31104 15.7164 6.18045C14.9609 5.04987 13.8872 4.16868 12.631 3.64833C11.3747 3.12798 9.99238 2.99183 8.65876 3.2571C7.32514 3.52237 6.10013 4.17715 5.13864 5.13864C4.17716 6.10013 3.52238 7.32513 3.2571 8.65875C2.99183 9.99237 3.12798 11.3747 3.64833 12.6309C4.16868 13.8872 5.04987 14.9609 6.18046 15.7164C7.31105 16.4718 8.64026 16.875 10 16.875C11.8227 16.8729 13.5702 16.1479 14.8591 14.8591C16.1479 13.5702 16.8729 11.8227 16.875 10Z" fill="#C1BBC3"/>
+                                            </svg>
+                                        </button>
+                                        {growth && (
+                                            <div className={`ml-auto px-3 py-1 rounded-full border ${
+                                                growth.growth > 0
+                                                    ? 'bg-[#FAFFFB] border-[#78D2A8] text-[#2D9C61]'
+                                                    : growth.growth === 0
+                                                        ? 'bg-[#F3F1FA] border-[#D4CDEB] text-[#847DC4]'
+                                                        : 'bg-[#FFF9FA] border-[#F06B8A] text-[#E75D7D]'
+                                            }`}>
+                                                <span className="text-sm font-bold">
+                                                    {growth.growth >= 0 ? '+' : ''}{growth.growth.toFixed(1)}%
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 세트 입력 */}
+                                    <div className="space-y-2">
+                                        {(record.sets || []).map((set, index) => {
+                                            const checkKey = `${record.id}-${index}`;
+                                            const isChecked = checkedSets[checkKey] || false;
+
+                                            return (
+                                                <div key={index} className="flex items-center gap-2">
+                                                    <span className="text-sm text-gray-400 w-14 flex-shrink-0">세트 {index + 1}</span>
+                                                    <input
+                                                        type="number"
+                                                        value={set.weight || ''}
+                                                        onChange={(e) => updateSet(record.id, index, 'weight', e.target.value)}
+                                                        placeholder="무게"
+                                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-center"
+                                                    />
+                                                    <span className="text-gray-400 text-sm flex-shrink-0">kg</span>
+                                                    <input
+                                                        type="number"
+                                                        value={set.reps || ''}
+                                                        onChange={(e) => updateSet(record.id, index, 'reps', e.target.value)}
+                                                        placeholder="횟수"
+                                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-center"
+                                                    />
+                                                    <span className="text-gray-400 text-sm flex-shrink-0">회</span>
+                                                    <button
+                                                        onClick={() => toggleSetCheck(record.id, index)}
+                                                        className="flex-shrink-0 ml-auto"
+                                                    >
+                                                        <div className={`w-[34px] h-[28px] rounded border flex items-center justify-center ${
+                                                            isChecked
+                                                                ? 'bg-[#A295D5] border-[#A295D5]'
+                                                                : 'border-gray-300'
+                                                        }`}>
+                                                            <svg className={`w-5 h-5 ${isChecked ? 'text-white' : 'text-gray-200'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* 세트 추가/삭제 버튼 */}
+                                    <div className="flex gap-2 mt-3">
+                                        <button
+                                            onClick={() => removeSet(record.id, (record.sets || []).length - 1)}
+                                            disabled={(record.sets || []).length === 0}
+                                            className="flex-1 py-2 border border-gray-300 rounded text-gray-500 text-sm disabled:opacity-30"
+                                        >
+                                            삭제
+                                        </button>
+                                        <button
+                                            onClick={() => addSet(record.id)}
+                                            className="flex-1 py-2 border border-gray-300 rounded text-gray-500 text-sm"
+                                        >
+                                            추가
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {dateRecords.length === 0 && (
+                            <div className="text-center py-12 text-gray-400">
+                                <div className="text-4xl mb-2">💪</div>
+                                <p>루틴을 선택하거나 운동을 추가하세요</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 루틴 선택 모달 */}
+                    {showRoutineModal && (
+                        <Modal onClose={() => setShowRoutineModal(false)} title="루틴 선택">
+                            <div className="space-y-2">
+                                {routines.map(routine => (
+                                    <button
+                                        key={routine.id}
+                                        onClick={() => handleRoutineSelect(routine)}
+                                        className="w-full p-4 bg-white border border-gray-300 rounded-lg hover:bg-[#F3F1FA] text-left"
+                                    >
+                                        <div className="font-bold text-gray-800">{routine.name}</div>
+                                        <div className="text-sm text-gray-500 mt-1">
+                                            {routine.exerciseIds.map(id => {
+                                                const ex = exercises.find(e => e.id === id);
+                                                return ex ? ex.name : '';
+                                            }).join(', ')}
+                                        </div>
+                                    </button>
+                                ))}
+                                {routines.length === 0 && (
+                                    <p className="text-center text-gray-400 py-8">저장된 루틴이 없습니다</p>
+                                )}
+                            </div>
+                        </Modal>
+                    )}
+
+                    {/* 운동 선택 모달 */}
+                    {showExerciseModal && (
+                        <ExerciseSelectModal
+                            exercises={exercises}
+                            onSelect={handleExerciseSelect}
+                            onClose={() => setShowExerciseModal(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // 캘린더 페이지
+        function CalendarPage({ records, exercises, setCurrentPage, setSelectedDate }) {
+            const [currentMonth, setCurrentMonth] = useState(new Date());
+            const [selectedDay, setSelectedDay] = useState(null);
+
+            const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+            const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
+
+            const prevMonth = () => {
+                setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+                setSelectedDay(null);
+            };
+
+            const nextMonth = () => {
+                setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+                setSelectedDay(null);
+            };
+
+            const getRecordsForDate = (day) => {
+                const dateStr = formatDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day));
+                return records.filter(r => r.date === dateStr && r.sets && r.sets.length > 0);
+            };
+
+            const handleDateClick = (day) => {
+                setSelectedDay(day);
+            };
+
+            const calculateVolume = (sets) => {
+                return sets.reduce((total, set) => total + (set.weight * set.reps), 0);
+            };
+
+            // 이번 달 운동 기록 횟수 계산
+            const getMonthWorkoutCount = () => {
+                const year = currentMonth.getFullYear();
+                const month = currentMonth.getMonth();
+
+                const datesWithWorkouts = new Set();
+                records.forEach(record => {
+                    if (record.sets && record.sets.length > 0) {
+                        const recordDate = new Date(record.date);
+                        if (recordDate.getFullYear() === year && recordDate.getMonth() === month) {
+                            datesWithWorkouts.add(record.date);
+                        }
+                    }
+                });
+
+                return datesWithWorkouts.size;
+            };
+
+            const monthWorkoutCount = getMonthWorkoutCount();
+            const selectedDayRecords = selectedDay ? getRecordsForDate(selectedDay) : [];
+
+            return (
+                <div className="p-4">
+                    {/* 이번 달 운동 횟수 */}
+                    <div className="mb-4 p-3 bg-[#F3F1FA] border border-[#D4CDEB] rounded-lg text-center">
+                        <span className="text-sm text-gray-700">
+                            이번달은 <span className="font-bold text-[#A295D5]">{monthWorkoutCount}번</span> 헬스장에 갔습니다
+                        </span>
+                    </div>
+
+                    {/* 월 선택 */}
+                    <div className="flex items-center justify-between mb-4">
+                        <button onClick={prevMonth} className="p-2">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M14.4697 5.46967C14.7626 5.17678 15.2373 5.17678 15.5302 5.46967C15.8231 5.76256 15.8231 6.23732 15.5302 6.53022L10.0605 11.9999L15.5302 17.4697C15.8231 17.7626 15.8231 18.2373 15.5302 18.5302C15.2373 18.8231 14.7626 18.8231 14.4697 18.5302L8.46967 12.5302C8.17678 12.2373 8.17678 11.7626 8.46967 11.4697L14.4697 5.46967Z" fill="#3F4146"/>
+                            </svg>
+                        </button>
+                        <span className="text-lg font-bold">
+                            {currentMonth.getFullYear()}년 {currentMonth.getMonth() + 1}월
+                        </span>
+                        <button onClick={nextMonth} className="p-2">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M8.46967 5.84467C8.76256 5.55178 9.23732 5.55178 9.53022 5.84467L15.5302 11.8447C15.8231 12.1376 15.8231 12.6123 15.5302 12.9052L9.53022 18.9052C9.23732 19.1981 8.76256 19.1981 8.46967 18.9052C8.17678 18.6123 8.17678 18.1376 8.46967 17.8447L13.9394 12.3749L8.46967 6.90522C8.17678 6.61232 8.17678 6.13756 8.46967 5.84467Z" fill="#3F4146"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* 요일 헤더 */}
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                        {['일', '월', '화', '수', '목', '금', '토'].map(day => (
+                            <div key={day} className="text-center text-sm font-bold text-gray-600 py-2">
+                                {day}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* 날짜 그리드 */}
+                    <div className="grid grid-cols-7 gap-1 mb-4">
+                        {[...Array(firstDayOfMonth)].map((_, i) => (
+                            <div key={`empty-${i}`} className="aspect-square"></div>
+                        ))}
+                        {[...Array(daysInMonth)].map((_, i) => {
+                            const day = i + 1;
+                            const dayRecords = getRecordsForDate(day);
+                            const hasRecords = dayRecords.length > 0;
+                            const isSelected = selectedDay === day;
+
+                            return (
+                                <button
+                                    key={day}
+                                    onClick={() => handleDateClick(day)}
+                                    className={`aspect-square border rounded flex flex-col items-center justify-center ${
+                                        isSelected
+                                            ? 'bg-[#A295D5] text-white border-[#A295D5]'
+                                            : hasRecords
+                                                ? 'bg-[#F3F1FA] border-[#D4CDEB]'
+                                                : 'border-gray-200'
+                                    } hover:bg-gray-50 ${isSelected && 'hover:bg-[#8E7FC4]'}`}
+                                >
+                                    <span className="text-sm">{day}</span>
+                                    {hasRecords && !isSelected && (
+                                        <span className="text-xs text-[#A295D5] mt-1">●</span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* 선택된 날짜의 운동 요약 */}
+                    {selectedDay && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4">
+                            <h3 className="font-bold text-lg text-gray-800 mb-3">
+                                {formatDateKorean(formatDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDay)))}
+                            </h3>
+                            
+                            {selectedDayRecords.length > 0 ? (
+                                <div className="space-y-3">
+                                    {selectedDayRecords.map(record => {
+                                        const exercise = exercises.find(e => e.id === record.exerciseId);
+                                        if (!exercise) return null;
+
+                                        return (
+                                            <div key={record.id} className="bg-gray-50 p-3 rounded-lg">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <h4 className="font-bold text-gray-800">{exercise.name}</h4>
+                                                    <span className="text-xs text-gray-500 bg-[#EAEAED] px-2 py-1 rounded">
+                                                        {exercise.tag}
+                                                    </span>
+                                                </div>
+                                                {record.sets && record.sets.length > 0 ? (
+                                                    <>
+                                                        <div className="space-y-1 mb-2">
+                                                            {record.sets.map((set, index) => (
+                                                                <div key={index} className="text-sm text-gray-700">
+                                                                    세트 {index + 1}: {set.weight}kg × {set.reps}회
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="text-sm text-gray-500 font-medium">
+                                                            총 볼륨: {calculateVolume(record.sets).toLocaleString()}kg
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="text-sm text-gray-400">기록 없음</div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                    
+                                    {/* 편집 버튼 */}
+                                    <button
+                                        onClick={() => {
+                                            const dateStr = formatDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDay));
+                                            setSelectedDate(dateStr);
+                                            setCurrentPage('home');
+                                        }}
+                                        className="w-full mt-3 bg-[#A295D5] text-white py-3 rounded-lg font-medium hover:bg-[#8E7FC4]"
+                                    >
+                                        이 날짜 편집하기
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="text-center text-gray-400 py-4">이 날은 운동 기록이 없습니다</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // 루틴 페이지
+        function RoutinesPage({ routines, exercises, addRoutine, setCurrentPage, setRoutines }) {
+            const [showModal, setShowModal] = useState(false);
+            const [routineName, setRoutineName] = useState('');
+            const [selectedExercises, setSelectedExercises] = useState([]);
+            const [selectedTagFilter, setSelectedTagFilter] = useState('전체');
+            const [editingRoutine, setEditingRoutine] = useState(null);
+            const [editingExerciseIds, setEditingExerciseIds] = useState([]);
+            const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+            const tags = ['전체', ...new Set(exercises.map(e => e.tag))];
+            
+            const filteredExercises = selectedTagFilter === '전체'
+                ? exercises
+                : exercises.filter(e => e.tag === selectedTagFilter);
+
+            const handleCreateRoutine = () => {
+                if (routineName.trim() && selectedExercises.length > 0) {
+                    addRoutine({
+                        name: routineName,
+                        exerciseIds: selectedExercises
+                    });
+                    setRoutineName('');
+                    setSelectedExercises([]);
+                    setSelectedTagFilter('전체');
+                    setShowModal(false);
+                }
+            };
+
+            const toggleExercise = (exerciseId) => {
+                if (selectedExercises.includes(exerciseId)) {
+                    setSelectedExercises(selectedExercises.filter(id => id !== exerciseId));
+                } else {
+                    setSelectedExercises([...selectedExercises, exerciseId]);
+                }
+            };
+
+            const handleDeleteRoutine = (routineId, e) => {
+                e.stopPropagation();
+                setDeleteConfirm(routineId);
+            };
+
+            const confirmDeleteRoutine = () => {
+                if (deleteConfirm) {
+                    setRoutines(routines.filter(r => r.id !== deleteConfirm));
+                    setDeleteConfirm(null);
+                }
+            };
+
+            const handleRoutineClick = (routine) => {
+                setEditingRoutine(routine);
+                setEditingExerciseIds([...routine.exerciseIds]);
+            };
+
+            const [draggedIndex, setDraggedIndex] = useState(null);
+
+            const handleDragStart = (index) => {
+                setDraggedIndex(index);
+            };
+
+            const handleDragOver = (e, index) => {
+                e.preventDefault();
+                if (draggedIndex === null || draggedIndex === index) return;
+
+                const newIds = [...editingExerciseIds];
+                const draggedItem = newIds[draggedIndex];
+
+                // 드래그된 아이템 제거
+                newIds.splice(draggedIndex, 1);
+                // 새 위치에 삽입
+                newIds.splice(index, 0, draggedItem);
+
+                setEditingExerciseIds(newIds);
+                setDraggedIndex(index);
+            };
+
+            const handleDragEnd = () => {
+                setDraggedIndex(null);
+            };
+
+            const saveRoutineOrder = () => {
+                setRoutines(routines.map(r =>
+                    r.id === editingRoutine.id
+                        ? { ...r, exerciseIds: editingExerciseIds }
+                        : r
+                ));
+                setEditingRoutine(null);
+                setEditingExerciseIds([]);
+            };
+
+            return (
+                <div className="p-4">
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="w-full bg-[#A295D5] text-white py-3 rounded-lg font-medium mb-4 hover:bg-[#8E7FC4]"
+                    >
+                        + 새 루틴 만들기
+                    </button>
+
+                    <div className="space-y-3">
+                        {routines.map(routine => (
+                            <div
+                                key={routine.id}
+                                onClick={() => handleRoutineClick(routine)}
+                                className="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50"
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="font-bold text-lg text-gray-800">{routine.name}</h3>
+                                    <button
+                                        onClick={(e) => handleDeleteRoutine(routine.id, e)}
+                                    >
+                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M13.75 10C13.75 10.1658 13.6842 10.3247 13.5669 10.4419C13.4497 10.5592 13.2908 10.625 13.125 10.625H6.875C6.70924 10.625 6.55027 10.5592 6.43306 10.4419C6.31585 10.3247 6.25 10.1658 6.25 10C6.25 9.83424 6.31585 9.67527 6.43306 9.55806C6.55027 9.44085 6.70924 9.375 6.875 9.375H13.125C13.2908 9.375 13.4497 9.44085 13.5669 9.55806C13.6842 9.67527 13.75 9.83424 13.75 10ZM18.125 10C18.125 11.607 17.6485 13.1779 16.7557 14.514C15.8629 15.8502 14.594 16.8916 13.1093 17.5065C11.6247 18.1215 9.99099 18.2824 8.41489 17.9689C6.8388 17.6554 5.39106 16.8815 4.25476 15.7452C3.11846 14.6089 2.34463 13.1612 2.03112 11.5851C1.71762 10.009 1.87852 8.37535 2.49348 6.8907C3.10844 5.40605 4.14985 4.1371 5.486 3.24431C6.82214 2.35152 8.39303 1.875 10 1.875C12.1542 1.87727 14.2195 2.73403 15.7427 4.25727C17.266 5.78051 18.1227 7.84581 18.125 10ZM16.875 10C16.875 8.64025 16.4718 7.31104 15.7164 6.18045C14.9609 5.04987 13.8872 4.16868 12.631 3.64833C11.3747 3.12798 9.99238 2.99183 8.65876 3.2571C7.32514 3.52237 6.10013 4.17715 5.13864 5.13864C4.17716 6.10013 3.52238 7.32513 3.2571 8.65875C2.99183 9.99237 3.12798 11.3747 3.64833 12.6309C4.16868 13.8872 5.04987 14.9609 6.18046 15.7164C7.31105 16.4718 8.64026 16.875 10 16.875C11.8227 16.8729 13.5702 16.1479 14.8591 14.8591C16.1479 13.5702 16.8729 11.8227 16.875 10Z" fill="#C1BBC3"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {routine.exerciseIds.map(id => {
+                                        const exercise = exercises.find(e => e.id === id);
+                                        return exercise ? (
+                                            <span key={id} className="text-sm bg-gray-100 px-3 py-1 rounded-full text-gray-700">
+                                                {exercise.name}
+                                            </span>
+                                        ) : null;
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+
+                        {routines.length === 0 && (
+                            <div className="text-center py-12 text-gray-400">
+                                <div className="text-4xl mb-2">💾</div>
+                                <p>저장된 루틴이 없습니다</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {showModal && (
+                        <Modal onClose={() => setShowModal(false)} title="새 루틴 만들기">
+                            <div className="space-y-4">
+                                <input
+                                    type="text"
+                                    value={routineName}
+                                    onChange={(e) => setRoutineName(e.target.value)}
+                                    placeholder="루틴 이름 (예: 하체 루틴)"
+                                    className="w-full p-3 border border-gray-300 rounded-lg"
+                                />
+
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="font-bold text-gray-700">운동 선택</h4>
+                                        {selectedExercises.length > 0 && (
+                                            <span className="text-sm text-[#A295D5]">
+                                                {selectedExercises.length}개 선택됨
+                                            </span>
+                                        )}
+                                    </div>
+                                    
+                                    {/* 태그 필터 */}
+                                    <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+                                        {tags.map(tag => (
+                                            <button
+                                                key={tag}
+                                                type="button"
+                                                onClick={() => setSelectedTagFilter(tag)}
+                                                className={`px-3 py-1 rounded-full whitespace-nowrap text-sm ${
+                                                    selectedTagFilter === tag
+                                                        ? 'bg-[#A295D5] text-white'
+                                                        : 'bg-gray-100 text-gray-700'
+                                                }`}
+                                            >
+                                                {tag}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                                        {filteredExercises.map(exercise => (
+                                            <label key={exercise.id} className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedExercises.includes(exercise.id)}
+                                                    onChange={() => toggleExercise(exercise.id)}
+                                                    className="mr-3"
+                                                />
+                                                <div>
+                                                    <div className="font-medium text-gray-800">{exercise.name}</div>
+                                                    <div className="text-xs text-gray-500">{exercise.tag}</div>
+                                                </div>
+                                            </label>
+                                        ))}
+                                        {filteredExercises.length === 0 && (
+                                            <p className="text-center text-gray-400 py-4">이 태그의 운동이 없습니다</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={handleCreateRoutine}
+                                    disabled={!routineName.trim() || selectedExercises.length === 0}
+                                    className="w-full bg-[#A295D5] text-white py-3 rounded-lg font-medium hover:bg-[#8E7FC4] disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                >
+                                    루틴 저장
+                                </button>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {/* 루틴 순서 변경 모달 */}
+                    {editingRoutine && (
+                        <Modal onClose={() => setEditingRoutine(null)} title={`${editingRoutine.name} 순서 변경`}>
+                            <div className="mb-3 text-sm text-gray-600">
+                                드래그해서 순서를 변경하세요
+                            </div>
+                            <div className="space-y-3">
+                                {editingExerciseIds.map((id, index) => {
+                                    const exercise = exercises.find(e => e.id === id);
+                                    if (!exercise) return null;
+
+                                    return (
+                                        <div
+                                            key={id}
+                                            draggable
+                                            onDragStart={() => handleDragStart(index)}
+                                            onDragOver={(e) => handleDragOver(e, index)}
+                                            onDragEnd={handleDragEnd}
+                                            className={`bg-gray-50 p-4 rounded-lg flex items-center gap-3 cursor-move touch-none ${
+                                                draggedIndex === index ? 'opacity-50' : ''
+                                            }`}
+                                        >
+                                            <div className="text-sm text-gray-400">#{index + 1}</div>
+                                            <div className="flex-1">
+                                                <div className="font-medium text-gray-800">{exercise.name}</div>
+                                                <div className="text-xs text-gray-500">{exercise.tag}</div>
+                                            </div>
+                                            <div className="text-2xl text-gray-400">☰</div>
+                                        </div>
+                                    );
+                                })}
+                                <button
+                                    onClick={saveRoutineOrder}
+                                    className="w-full bg-[#A295D5] text-white py-3 rounded-lg font-medium hover:bg-[#8E7FC4] mt-4"
+                                >
+                                    저장
+                                </button>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {deleteConfirm && (
+                        <ConfirmModal
+                            message="이 루틴을 삭제하시겠습니까?"
+                            onConfirm={confirmDeleteRoutine}
+                            onCancel={() => setDeleteConfirm(null)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // 운동 관리 페이지
+        function ExercisesPage({ exercises, addExercise, records, setExercises }) {
+            const [showModal, setShowModal] = useState(false);
+            const [exerciseName, setExerciseName] = useState('');
+            const [exerciseTag, setExerciseTag] = useState('');
+            const [selectedTag, setSelectedTag] = useState('전체');
+            const [selectedExercise, setSelectedExercise] = useState(null);
+            const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+            const tags = ['전체', ...new Set(exercises.map(e => e.tag))];
+
+            const filteredExercises = selectedTag === '전체'
+                ? exercises
+                : exercises.filter(e => e.tag === selectedTag);
+
+            const handleAddExercise = () => {
+                if (exerciseName.trim() && exerciseTag.trim()) {
+                    addExercise({
+                        name: exerciseName,
+                        tag: exerciseTag
+                    });
+                    setExerciseName('');
+                    setExerciseTag('');
+                    setShowModal(false);
+                }
+            };
+
+            const getExerciseHistory = (exerciseId) => {
+                return records
+                    .filter(r => r.exerciseId === exerciseId && r.sets && r.sets.length > 0)
+                    .sort((a, b) => b.date.localeCompare(a.date));
+            };
+
+            const calculateVolume = (sets) => {
+                return sets.reduce((total, set) => total + (set.weight * set.reps), 0);
+            };
+
+            const handleDeleteExercise = (exerciseId, e) => {
+                e.stopPropagation();
+                setDeleteConfirm(exerciseId);
+            };
+
+            const confirmDeleteExercise = () => {
+                if (deleteConfirm) {
+                    setExercises(exercises.filter(ex => ex.id !== deleteConfirm));
+                    setDeleteConfirm(null);
+                }
+            };
+
+            return (
+                <div className="p-4">
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="w-full bg-[#A295D5] text-white py-3 rounded-lg font-medium mb-4 hover:bg-[#8E7FC4]"
+                    >
+                        + 새 운동 추가
+                    </button>
+
+                    {/* 태그 필터 */}
+                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                        {tags.map(tag => (
+                            <button
+                                key={tag}
+                                onClick={() => setSelectedTag(tag)}
+                                className={`px-4 py-2 rounded-full whitespace-nowrap ${
+                                    selectedTag === tag
+                                        ? 'bg-[#A295D5] text-white'
+                                        : 'bg-gray-100 text-gray-700'
+                                }`}
+                            >
+                                {tag}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* 운동 리스트 */}
+                    <div className="space-y-2">
+                        {filteredExercises.map(exercise => (
+                            <div
+                                key={exercise.id}
+                                className="w-full bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 flex items-center justify-between"
+                            >
+                                <button
+                                    onClick={() => setSelectedExercise(exercise)}
+                                    className="flex-1 text-left"
+                                >
+                                    <div className="font-bold text-gray-800">{exercise.name}</div>
+                                    <div className="text-sm text-gray-500 mt-1">{exercise.tag}</div>
+                                </button>
+                                <button
+                                    onClick={(e) => handleDeleteExercise(exercise.id, e)}
+                                    className="ml-2 px-3"
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M13.75 10C13.75 10.1658 13.6842 10.3247 13.5669 10.4419C13.4497 10.5592 13.2908 10.625 13.125 10.625H6.875C6.70924 10.625 6.55027 10.5592 6.43306 10.4419C6.31585 10.3247 6.25 10.1658 6.25 10C6.25 9.83424 6.31585 9.67527 6.43306 9.55806C6.55027 9.44085 6.70924 9.375 6.875 9.375H13.125C13.2908 9.375 13.4497 9.44085 13.5669 9.55806C13.6842 9.67527 13.75 9.83424 13.75 10ZM18.125 10C18.125 11.607 17.6485 13.1779 16.7557 14.514C15.8629 15.8502 14.594 16.8916 13.1093 17.5065C11.6247 18.1215 9.99099 18.2824 8.41489 17.9689C6.8388 17.6554 5.39106 16.8815 4.25476 15.7452C3.11846 14.6089 2.34463 13.1612 2.03112 11.5851C1.71762 10.009 1.87852 8.37535 2.49348 6.8907C3.10844 5.40605 4.14985 4.1371 5.486 3.24431C6.82214 2.35152 8.39303 1.875 10 1.875C12.1542 1.87727 14.2195 2.73403 15.7427 4.25727C17.266 5.78051 18.1227 7.84581 18.125 10ZM16.875 10C16.875 8.64025 16.4718 7.31104 15.7164 6.18045C14.9609 5.04987 13.8872 4.16868 12.631 3.64833C11.3747 3.12798 9.99238 2.99183 8.65876 3.2571C7.32514 3.52237 6.10013 4.17715 5.13864 5.13864C4.17716 6.10013 3.52238 7.32513 3.2571 8.65875C2.99183 9.99237 3.12798 11.3747 3.64833 12.6309C4.16868 13.8872 5.04987 14.9609 6.18046 15.7164C7.31105 16.4718 8.64026 16.875 10 16.875C11.8227 16.8729 13.5702 16.1479 14.8591 14.8591C16.1479 13.5702 16.8729 11.8227 16.875 10Z" fill="#C1BBC3"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        ))}
+
+                        {filteredExercises.length === 0 && (
+                            <div className="text-center py-12 text-gray-400">
+                                <div className="text-4xl mb-2">🏋️</div>
+                                <p>운동이 없습니다</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 운동 추가 모달 */}
+                    {showModal && (
+                        <Modal onClose={() => setShowModal(false)} title="새 운동 추가">
+                            <div className="space-y-4">
+                                <input
+                                    type="text"
+                                    value={exerciseName}
+                                    onChange={(e) => setExerciseName(e.target.value)}
+                                    placeholder="운동 이름 (예: 벤치프레스)"
+                                    className="w-full p-3 border border-gray-300 rounded-lg"
+                                />
+                                <div>
+                                    <input
+                                        type="text"
+                                        list="tag-options"
+                                        value={exerciseTag}
+                                        onChange={(e) => setExerciseTag(e.target.value)}
+                                        placeholder="태그 (예: 가슴, 하체, 등)"
+                                        className="w-full p-3 border border-gray-300 rounded-lg"
+                                    />
+                                    <datalist id="tag-options">
+                                        {tags.filter(tag => tag !== '전체').map(tag => (
+                                            <option key={tag} value={tag} />
+                                        ))}
+                                    </datalist>
+                                    {tags.length > 1 && (
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            {tags.filter(tag => tag !== '전체').map(tag => (
+                                                <button
+                                                    key={tag}
+                                                    type="button"
+                                                    onClick={() => setExerciseTag(tag)}
+                                                    className="bg-gray-100 hover:bg-[#F3F1FA] px-4 py-2 rounded-full text-gray-700"
+                                                >
+                                                    {tag}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={handleAddExercise}
+                                    disabled={!exerciseName.trim() || !exerciseTag.trim()}
+                                    className="w-full bg-[#A295D5] text-white py-3 rounded-lg font-medium hover:bg-[#8E7FC4] disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                >
+                                    운동 추가
+                                </button>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {/* 운동 히스토리 모달 */}
+                    {selectedExercise && (
+                        <Modal onClose={() => setSelectedExercise(null)} title={`${selectedExercise.name} 히스토리`}>
+                            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                                {getExerciseHistory(selectedExercise.id).map(record => (
+                                    <div key={record.id} className="bg-gray-50 p-4 rounded-lg">
+                                        <div className="font-bold text-gray-800 mb-2">
+                                            {formatDateKorean(record.date)}
+                                        </div>
+                                        <div className="space-y-1">
+                                            {record.sets.map((set, index) => (
+                                                <div key={index} className="text-sm text-gray-700">
+                                                    세트 {index + 1}: {set.weight}kg × {set.reps}회
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="text-sm text-gray-500 mt-2">
+                                            총 볼륨: {calculateVolume(record.sets).toLocaleString()}kg
+                                        </div>
+                                    </div>
+                                ))}
+                                {getExerciseHistory(selectedExercise.id).length === 0 && (
+                                    <p className="text-center text-gray-400 py-8">기록이 없습니다</p>
+                                )}
+                            </div>
+                        </Modal>
+                    )}
+
+                    {deleteConfirm && (
+                        <ConfirmModal
+                            message="이 운동을 삭제하시겠습니까?"
+                            onConfirm={confirmDeleteExercise}
+                            onCancel={() => setDeleteConfirm(null)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // 운동 선택 모달
+        function ExerciseSelectModal({ exercises, onSelect, onClose }) {
+            const [selectedTag, setSelectedTag] = useState('전체');
+
+            const tags = ['전체', ...new Set(exercises.map(e => e.tag))];
+
+            const filteredExercises = exercises.filter(e => {
+                const matchesTag = selectedTag === '전체' || e.tag === selectedTag;
+                return matchesTag;
+            });
+
+            return (
+                <Modal onClose={onClose} title="운동 선택">
+                    <div className="space-y-4">
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                            {tags.map(tag => (
+                                <button
+                                    key={tag}
+                                    onClick={() => setSelectedTag(tag)}
+                                    className={`px-4 py-2 rounded-full whitespace-nowrap ${
+                                        selectedTag === tag
+                                            ? 'bg-[#A295D5] text-white'
+                                            : 'bg-gray-100 text-gray-700'
+                                    }`}
+                                >
+                                    {tag}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {filteredExercises.map(exercise => (
+                                <button
+                                    key={exercise.id}
+                                    onClick={() => onSelect(exercise.id)}
+                                    className="w-full bg-white border border-gray-200 rounded-lg p-4 hover:bg-[#F3F1FA] text-left"
+                                >
+                                    <div className="font-bold text-gray-800">{exercise.name}</div>
+                                    <div className="text-sm text-gray-500 mt-1">{exercise.tag}</div>
+                                </button>
+                            ))}
+
+                            {filteredExercises.length === 0 && (
+                                <p className="text-center text-gray-400 py-8">해당 태그에 운동이 없습니다</p>
+                            )}
+                        </div>
+                    </div>
+                </Modal>
+            );
+        }
+
+        // 모달 컴포넌트
+        function Modal({ onClose, title, children }) {
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-hidden">
+                        <div className="flex items-center justify-between p-4 border-b">
+                            <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+                            <button
+                                onClick={onClose}
+                                className="text-gray-500 hover:text-gray-700 text-2xl"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 64px)' }}>
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // 확인 모달 컴포넌트
+        function ConfirmModal({ onConfirm, onCancel, message }) {
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg max-w-sm w-full">
+                        <div className="p-6">
+                            <p className="text-center text-gray-800 text-base mb-6">{message}</p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={onCancel}
+                                    className="flex-1 py-3 bg-white border border-gray-300 rounded text-gray-700 text-sm"
+                                >
+                                    취소
+                                </button>
+                                <button
+                                    onClick={onConfirm}
+                                    className="flex-1 py-3 bg-[#A295D5] rounded text-white text-sm"
+                                >
+                                    삭제
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // 앱 렌더링
+        ReactDOM.render(<App />, document.getElementById('root'));
+        
+        // 스플래시 화면 숨기기 (1.5초 후)
+        setTimeout(() => {
+            const splash = document.getElementById('splash-screen');
+            if (splash) {
+                splash.classList.add('hidden');
+                setTimeout(() => splash.remove(), 500); // 페이드아웃 후 제거
+            }
+        }, 1500);
+
+        // Service Worker 등록 (PWA 설치를 위해 필수)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => console.log('SW registered'))
+                    .catch(err => console.log('SW registration failed'));
+            });
+        }
+    </script>
+</body>
+</html>
