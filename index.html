@@ -103,7 +103,8 @@
         const STORAGE_KEYS = {
             WORKOUTS: 'workout_exercises',
             RECORDS: 'workout_records',
-            ROUTINES: 'workout_routines'
+            ROUTINES: 'workout_routines',
+            CHECKED_SETS: 'metamong-checked-sets'
         };
 
         // 데이터 로드 및 저장 함수
@@ -122,11 +123,15 @@
 
         // 날짜 포맷 함수
         const formatDate = (date) => {
-            return date.toISOString().split('T')[0];
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         };
 
         const formatDateKorean = (dateStr) => {
-            const date = new Date(dateStr);
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
             const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
             const dayOfWeek = days[date.getDay()];
             return `${date.getMonth() + 1}월 ${date.getDate()}일 ${dayOfWeek}`;
@@ -287,12 +292,22 @@
             const [showRoutineModal, setShowRoutineModal] = useState(false);
             const [showExerciseModal, setShowExerciseModal] = useState(false);
             const dateInputRef = React.useRef(null);
-            const [checkedSets, setCheckedSets] = useState({});
+            const [checkedSets, setCheckedSets] = useState(loadData(STORAGE_KEYS.CHECKED_SETS) || {});
+            const [showOrderModal, setShowOrderModal] = useState(false);
+            const [editingRecordIds, setEditingRecordIds] = useState([]);
+            const [draggedIndex, setDraggedIndex] = useState(null);
+            const longPressTimerRef = React.useRef(null);
+            const [showKeyboard, setShowKeyboard] = useState(false);
+            const [keyboardTarget, setKeyboardTarget] = useState(null); // {recordId, setIndex, field}
 
             useEffect(() => {
                 const recordsForDate = records.filter(r => r.date === selectedDate);
                 setDateRecords(recordsForDate);
             }, [records, selectedDate]);
+
+            useEffect(() => {
+                saveData(STORAGE_KEYS.CHECKED_SETS, checkedSets);
+            }, [checkedSets]);
 
             // 볼륨 계산
             const calculateVolume = (sets) => {
@@ -459,6 +474,117 @@
                 }));
             };
 
+            // 길게 누르기 핸들러
+            const handleLongPressStart = () => {
+                longPressTimerRef.current = setTimeout(() => {
+                    if (dateRecords.length > 1) {
+                        setEditingRecordIds(dateRecords.map(r => r.id));
+                        setShowOrderModal(true);
+                    }
+                }, 500); // 500ms 길게 누르기
+            };
+
+            const handleLongPressEnd = () => {
+                if (longPressTimerRef.current) {
+                    clearTimeout(longPressTimerRef.current);
+                    longPressTimerRef.current = null;
+                }
+            };
+
+            // 드래그 앤 드롭 핸들러
+            const handleDragStart = (index) => {
+                setDraggedIndex(index);
+            };
+
+            const handleDragOver = (e, index) => {
+                e.preventDefault();
+                if (draggedIndex === null || draggedIndex === index) return;
+
+                const newIds = [...editingRecordIds];
+                const draggedItem = newIds[draggedIndex];
+
+                newIds.splice(draggedIndex, 1);
+                newIds.splice(index, 0, draggedItem);
+
+                setEditingRecordIds(newIds);
+                setDraggedIndex(index);
+            };
+
+            const handleDragEnd = () => {
+                setDraggedIndex(null);
+            };
+
+            // 순서 저장
+            const saveRecordOrder = () => {
+                // records 배열에서 현재 날짜의 레코드들을 새 순서로 업데이트
+                const otherRecords = records.filter(r => r.date !== selectedDate);
+                const reorderedRecords = editingRecordIds.map(id =>
+                    records.find(r => r.id === id)
+                );
+
+                // 전체 records 배열을 업데이트 (다른 날짜 레코드 + 재정렬된 오늘 레코드)
+                const newRecords = [...otherRecords, ...reorderedRecords];
+
+                // 부모 컴포넌트의 records를 직접 업데이트하기 위해 localStorage에 저장
+                saveData(STORAGE_KEYS.RECORDS, newRecords);
+
+                // 페이지 새로고침으로 상태 반영
+                window.location.reload();
+            };
+
+            // 커스텀 키보드 핸들러
+            const openKeyboard = (recordId, setIndex, field) => {
+                setKeyboardTarget({ recordId, setIndex, field });
+                setShowKeyboard(true);
+            };
+
+            const closeKeyboard = () => {
+                setShowKeyboard(false);
+                setKeyboardTarget(null);
+            };
+
+            const handleKeyboardInput = (value) => {
+                if (!keyboardTarget) return;
+
+                const { recordId, setIndex, field } = keyboardTarget;
+                const record = dateRecords.find(r => r.id === recordId);
+                const currentValue = String(record.sets[setIndex][field] || '');
+
+                if (value === 'backspace') {
+                    const newValue = currentValue.slice(0, -1);
+                    updateSet(recordId, setIndex, field, newValue || '0');
+                } else if (value === 'next') {
+                    // 다음 입력으로 이동
+                    if (field === 'weight') {
+                        setKeyboardTarget({ recordId, setIndex, field: 'reps' });
+                    } else {
+                        // 다음 세트나 닫기
+                        const nextSetIndex = setIndex + 1;
+                        if (record.sets[nextSetIndex]) {
+                            setKeyboardTarget({ recordId, setIndex: nextSetIndex, field: 'weight' });
+                        } else {
+                            closeKeyboard();
+                        }
+                    }
+                } else if (value === '+1' || value === '-1' || value === '+5' || value === '-5') {
+                    const currentNum = parseFloat(currentValue) || 0;
+                    const delta = parseFloat(value);
+                    const newValue = Math.max(0, currentNum + delta);
+                    updateSet(recordId, setIndex, field, String(newValue));
+                } else {
+                    // 숫자나 소수점 입력
+                    const newValue = currentValue === '0' ? value : currentValue + value;
+                    updateSet(recordId, setIndex, field, newValue);
+                }
+            };
+
+            const getCurrentValue = () => {
+                if (!keyboardTarget) return '';
+                const { recordId, setIndex, field } = keyboardTarget;
+                const record = dateRecords.find(r => r.id === recordId);
+                return record?.sets?.[setIndex]?.[field] || '';
+            };
+
             return (
                 <div className="p-4">
                     {/* 날짜 표시 */}
@@ -549,7 +675,14 @@
                             return (
                                 <div key={record.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                                     {/* 운동 헤더 */}
-                                    <div className="flex items-center mb-3">
+                                    <div
+                                        className="flex items-center mb-3"
+                                        onMouseDown={handleLongPressStart}
+                                        onMouseUp={handleLongPressEnd}
+                                        onMouseLeave={handleLongPressEnd}
+                                        onTouchStart={handleLongPressStart}
+                                        onTouchEnd={handleLongPressEnd}
+                                    >
                                         <h3 className="text-lg font-bold text-gray-800">{exercise.name}</h3>
                                         <button
                                             onClick={() => deleteRecord(record.id)}
@@ -581,22 +714,40 @@
                                             const isChecked = checkedSets[checkKey] || false;
 
                                             return (
-                                                <div key={index} className="flex items-center gap-2">
-                                                    <span className="text-sm text-gray-400 w-14 flex-shrink-0">세트 {index + 1}</span>
+                                                <div key={index} className="flex items-center gap-1.5">
+                                                    <span className="text-sm text-gray-400 flex-shrink-0" style={{minWidth: '48px'}}>세트 {index + 1}</span>
                                                     <input
-                                                        type="number"
+                                                        type="text"
+                                                        inputMode="none"
                                                         value={set.weight || ''}
-                                                        onChange={(e) => updateSet(record.id, index, 'weight', e.target.value)}
+                                                        onFocus={() => openKeyboard(record.id, index, 'weight')}
+                                                        readOnly
                                                         placeholder="무게"
-                                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-center"
+                                                        className={`flex-1 min-w-0 px-2 py-1 border rounded text-center ${
+                                                            keyboardTarget?.recordId === record.id &&
+                                                            keyboardTarget?.setIndex === index &&
+                                                            keyboardTarget?.field === 'weight'
+                                                                ? 'border-[#A295D5] border-2 bg-[#F3F1FA]'
+                                                                : 'border-gray-300'
+                                                        }`}
+                                                        style={{maxWidth: '70px'}}
                                                     />
                                                     <span className="text-gray-400 text-sm flex-shrink-0">kg</span>
                                                     <input
-                                                        type="number"
+                                                        type="text"
+                                                        inputMode="none"
                                                         value={set.reps || ''}
-                                                        onChange={(e) => updateSet(record.id, index, 'reps', e.target.value)}
+                                                        onFocus={() => openKeyboard(record.id, index, 'reps')}
+                                                        readOnly
                                                         placeholder="횟수"
-                                                        className="w-20 px-2 py-1 border border-gray-300 rounded text-center"
+                                                        className={`flex-1 min-w-0 px-2 py-1 border rounded text-center ${
+                                                            keyboardTarget?.recordId === record.id &&
+                                                            keyboardTarget?.setIndex === index &&
+                                                            keyboardTarget?.field === 'reps'
+                                                                ? 'border-[#A295D5] border-2 bg-[#F3F1FA]'
+                                                                : 'border-gray-300'
+                                                        }`}
+                                                        style={{maxWidth: '70px'}}
                                                     />
                                                     <span className="text-gray-400 text-sm flex-shrink-0">회</span>
                                                     <button
@@ -679,6 +830,87 @@
                             onSelect={handleExerciseSelect}
                             onClose={() => setShowExerciseModal(false)}
                         />
+                    )}
+
+                    {/* 운동 순서 변경 모달 */}
+                    {showOrderModal && (
+                        <Modal onClose={() => setShowOrderModal(false)} title="운동 순서 변경">
+                            <div className="mb-3 text-sm text-gray-600">
+                                드래그해서 순서를 변경하세요
+                            </div>
+                            <div className="space-y-3">
+                                {editingRecordIds.map((recordId, index) => {
+                                    const record = records.find(r => r.id === recordId);
+                                    const exercise = exercises.find(e => e.id === record?.exerciseId);
+                                    if (!exercise) return null;
+
+                                    return (
+                                        <div
+                                            key={recordId}
+                                            draggable
+                                            onDragStart={() => handleDragStart(index)}
+                                            onDragOver={(e) => handleDragOver(e, index)}
+                                            onDragEnd={handleDragEnd}
+                                            className={`bg-gray-50 p-4 rounded-lg flex items-center gap-3 cursor-move touch-none ${
+                                                draggedIndex === index ? 'opacity-50' : ''
+                                            }`}
+                                        >
+                                            <div className="text-sm text-gray-400">#{index + 1}</div>
+                                            <div className="flex-1">
+                                                <div className="font-medium text-gray-800">{exercise.name}</div>
+                                                <div className="text-xs text-gray-500">{exercise.tag}</div>
+                                            </div>
+                                            <div className="text-2xl text-gray-400">☰</div>
+                                        </div>
+                                    );
+                                })}
+                                <button
+                                    onClick={saveRecordOrder}
+                                    className="w-full bg-[#A295D5] text-white py-3 rounded-lg font-medium hover:bg-[#8E7FC4] mt-4"
+                                >
+                                    저장
+                                </button>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {/* 커스텀 키보드 */}
+                    {showKeyboard && (
+                        <div className="fixed bottom-0 left-0 right-0 flex items-end justify-center z-50">
+                            <div className="w-full bg-[#CCCCCC]" style={{padding: '0.4%'}}>
+                                <div className="grid gap-[0.4%]" style={{gridTemplateColumns: '21.1% 20.8% 21.1% 13.3% 13.3%'}}>
+                                    {/* Row 1 */}
+                                    <button onClick={() => handleKeyboardInput('1')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '79/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>1</button>
+                                    <button onClick={() => handleKeyboardInput('2')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '78/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>2</button>
+                                    <button onClick={() => handleKeyboardInput('3')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '79/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>3</button>
+                                    <button onClick={() => handleKeyboardInput('-1')} className="bg-[#EBE7FA] rounded flex items-center justify-center text-[#320D3E]" style={{aspectRatio: '50/53', fontSize: 'clamp(16px, 5.3vw, 20px)'}}>-1</button>
+                                    <button onClick={() => handleKeyboardInput('+1')} className="bg-[#EBE7FA] rounded flex items-center justify-center text-[#320D3E]" style={{aspectRatio: '50/53', fontSize: 'clamp(16px, 5.3vw, 20px)'}}>+1</button>
+
+                                    {/* Row 2 */}
+                                    <button onClick={() => handleKeyboardInput('4')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '79/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>4</button>
+                                    <button onClick={() => handleKeyboardInput('5')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '78/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>5</button>
+                                    <button onClick={() => handleKeyboardInput('6')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '79/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>6</button>
+                                    <button onClick={() => handleKeyboardInput('-5')} className="bg-[#EBE7FA] rounded flex items-center justify-center text-[#320D3E]" style={{aspectRatio: '50/53', fontSize: 'clamp(16px, 5.3vw, 20px)'}}>-5</button>
+                                    <button onClick={() => handleKeyboardInput('+5')} className="bg-[#EBE7FA] rounded flex items-center justify-center text-[#320D3E]" style={{aspectRatio: '50/53', fontSize: 'clamp(16px, 5.3vw, 20px)'}}>+5</button>
+
+                                    {/* Row 3 */}
+                                    <button onClick={() => handleKeyboardInput('7')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '79/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>7</button>
+                                    <button onClick={() => handleKeyboardInput('8')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '78/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>8</button>
+                                    <button onClick={() => handleKeyboardInput('9')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '79/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>9</button>
+                                    <button onClick={() => handleKeyboardInput('next')} className="bg-[#A295D5] rounded col-span-2 flex items-center justify-center text-white font-medium" style={{aspectRatio: '106/53', fontSize: 'clamp(16px, 5.3vw, 20px)'}}>NEXT</button>
+
+                                    {/* Row 4 */}
+                                    <button onClick={() => handleKeyboardInput('.')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '79/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>.</button>
+                                    <button onClick={() => handleKeyboardInput('0')} className="bg-white rounded flex items-center justify-center text-[#373737]" style={{aspectRatio: '78/53', fontSize: 'clamp(20px, 6.7vw, 25px)'}}>0</button>
+                                    <button onClick={() => handleKeyboardInput('backspace')} className="bg-white rounded flex items-center justify-center" style={{aspectRatio: '79/53'}}>
+                                        <svg style={{width: 'clamp(20px, 6.4vw, 24px)', height: 'clamp(20px, 6.4vw, 24px)'}} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M20.2502 3.75H6.42492C6.16602 3.75075 5.91167 3.81816 5.68638 3.94574C5.4611 4.07333 5.27247 4.25679 5.13867 4.47844L0.857107 11.6137C0.787025 11.7304 0.75 11.8639 0.75 12C0.75 12.1361 0.787025 12.2696 0.857107 12.3862L5.13867 19.5216C5.27247 19.7432 5.4611 19.9267 5.68638 20.0543C5.91167 20.1818 6.16602 20.2493 6.42492 20.25H20.2502C20.6481 20.25 21.0296 20.092 21.3109 19.8107C21.5922 19.5294 21.7502 19.1478 21.7502 18.75V5.25C21.7502 4.85218 21.5922 4.47064 21.3109 4.18934C21.0296 3.90804 20.6481 3.75 20.2502 3.75ZM20.2502 18.75H6.42492L2.37492 12L6.42492 5.25H20.2502V18.75ZM9.96961 13.7194L11.6899 12L9.96961 10.2806C9.82888 10.1399 9.74982 9.94902 9.74982 9.75C9.74982 9.55098 9.82888 9.36011 9.96961 9.21937C10.1103 9.07864 10.3012 8.99958 10.5002 8.99958C10.6993 8.99958 10.8901 9.07864 11.0309 9.21937L12.7502 10.9397L14.4696 9.21937C14.5393 9.14969 14.622 9.09442 14.7131 9.0567C14.8041 9.01899 14.9017 8.99958 15.0002 8.99958C15.0988 8.99958 15.1964 9.01899 15.2874 9.0567C15.3785 9.09442 15.4612 9.14969 15.5309 9.21937C15.6005 9.28906 15.6558 9.37178 15.6935 9.46283C15.7312 9.55387 15.7507 9.65145 15.7507 9.75C15.7507 9.84855 15.7312 9.94613 15.6935 10.0372C15.6558 10.1282 15.6005 10.2109 15.5309 10.2806L13.8105 12L15.5309 13.7194C15.6005 13.7891 15.6558 13.8718 15.6935 13.9628C15.7312 14.0539 15.7507 14.1515 15.7507 14.25C15.7507 14.3485 15.7312 14.4461 15.6935 14.5372C15.6558 14.6282 15.6005 14.7109 15.5309 14.7806C15.4612 14.8503 15.3785 14.9056 15.2874 14.9433C15.1964 14.981 15.0988 15.0004 15.0002 15.0004C14.9017 15.0004 14.8041 14.981 14.7131 14.9433C14.622 14.9056 14.5393 14.8503 14.4696 14.7806L12.7502 13.0603L11.0309 14.7806C10.9612 14.8503 10.8785 14.9056 10.7874 14.9433C10.6964 14.981 10.5988 15.0004 10.5002 15.0004C10.4017 15.0004 10.3041 14.981 10.2131 14.9433C10.122 14.9056 10.0393 14.8503 9.96961 14.7806C9.89993 14.7109 9.84465 14.6282 9.80694 14.5372C9.76923 14.4461 9.74982 14.3485 9.74982 14.25C9.74982 14.1515 9.76923 14.0539 9.80694 13.9628C9.84465 13.8718 9.89993 13.7891 9.96961 13.7194Z" fill="black"/>
+                                        </svg>
+                                    </button>
+                                    <button onClick={closeKeyboard} className="bg-[#EBE7FA] rounded col-span-2 flex items-center justify-center text-[#373737]" style={{aspectRatio: '106/53', fontSize: 'clamp(16px, 5.3vw, 20px)'}}>닫기</button>
+                                </div>
+                            </div>
+                        </div>
                     )}
                 </div>
             );
@@ -858,7 +1090,7 @@
                                 </div>
                             ) : (
                                 <div className="text-center py-8">
-                                    <img src="angry.png" alt="운동 기록 없음" className="mx-auto mb-4" style={{maxWidth: '200px'}} />
+                                    <img src="angry.png" alt="운동 기록 없음" className="mx-auto mb-4" style={{maxWidth: '160px'}} />
                                     <p className="text-gray-400">이 날은 운동 기록이 없습니다</p>
                                 </div>
                             )}

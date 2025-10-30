@@ -1,5 +1,5 @@
 // Service Worker - PWA 설치를 위한 필수 파일
-const CACHE_NAME = 'metamong-v45';
+const CACHE_NAME = 'metamong-v55';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -35,6 +35,15 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
-      .then(response => response || fetch(event.request))
+      .then(response => {
+        if (response) {
+          return response;
+        }
+        return fetch(event.request).catch(error => {
+          // 네트워크 요청 실패 시 (이미지 등) 조용히 실패
+          console.log('Fetch failed for:', event.request.url);
+          return new Response('', { status: 404, statusText: 'Not Found' });
+        });
+      })
   );
 });
