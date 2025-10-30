@@ -253,6 +253,7 @@
                                 addRecords={addRecords}
                                 updateRecord={updateRecord}
                                 deleteRecord={deleteRecord}
+                                setRecords={setRecords}
                             />
                         )}
                         {currentPage === 'calendar' && (
@@ -286,7 +287,7 @@
         }
 
         // 홈 페이지
-        function HomePage({ exercises, records, routines, selectedDate, setSelectedDate, addRecord, addRecords, updateRecord, deleteRecord }) {
+        function HomePage({ exercises, records, routines, selectedDate, setSelectedDate, addRecord, addRecords, updateRecord, deleteRecord, setRecords }) {
             const [selectedRoutine, setSelectedRoutine] = useState(null);
             const [dateRecords, setDateRecords] = useState([]);
             const [showRoutineModal, setShowRoutineModal] = useState(false);
@@ -525,11 +526,11 @@
                 // 전체 records 배열을 업데이트 (다른 날짜 레코드 + 재정렬된 오늘 레코드)
                 const newRecords = [...otherRecords, ...reorderedRecords];
 
-                // 부모 컴포넌트의 records를 직접 업데이트하기 위해 localStorage에 저장
-                saveData(STORAGE_KEYS.RECORDS, newRecords);
+                // 부모 컴포넌트의 records 상태를 직접 업데이트 (새로고침 없이)
+                setRecords(newRecords);
 
-                // 페이지 새로고침으로 상태 반영
-                window.location.reload();
+                // 모달 닫기
+                setShowOrderModal(false);
             };
 
             // 커스텀 키보드 핸들러

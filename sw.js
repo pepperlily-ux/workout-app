@@ -1,5 +1,5 @@
 // Service Worker - PWA 설치를 위한 필수 파일
-const CACHE_NAME = 'metamong-v59';
+const CACHE_NAME = 'metamong-v60';
 const urlsToCache = [
   '/',
   '/index.html',
