@@ -559,14 +559,14 @@
 
                         // 입력 필드가 키보드에 가려지는지 확인
                         if (inputRect.bottom > viewportHeight - keyboardHeight) {
-                            const scrollAmount = inputRect.bottom - (viewportHeight - keyboardHeight) + 20; // 20px 여유
+                            const scrollAmount = inputRect.bottom - (viewportHeight - keyboardHeight) + 80; // 80px 여유 (더 많이 스크롤)
                             window.scrollBy({
                                 top: scrollAmount,
                                 behavior: 'smooth'
                             });
                         }
                     }
-                }, 100);
+                }, 150);
             };
 
             const closeKeyboard = () => {
@@ -906,7 +906,7 @@
                     )}
 
                     {/* 키보드를 위한 스크롤 여백 */}
-                    {showKeyboard && <div style={{height: '300px'}} />}
+                    {showKeyboard && <div style={{height: '400px'}} />}
 
                     {/* 커스텀 키보드 */}
                     {showKeyboard && (
