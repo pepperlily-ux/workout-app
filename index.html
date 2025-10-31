@@ -905,6 +905,9 @@
                         </Modal>
                     )}
 
+                    {/* 키보드를 위한 스크롤 여백 */}
+                    {showKeyboard && <div style={{height: '300px'}} />}
+
                     {/* 커스텀 키보드 */}
                     {showKeyboard && (
                         <div className="fixed bottom-0 left-0 right-0 flex items-end justify-center z-50">
