@@ -311,6 +311,7 @@
             const longPressTimerRef = React.useRef(null);
             const [showKeyboard, setShowKeyboard] = useState(false);
             const [keyboardTarget, setKeyboardTarget] = useState(null); // {recordId, setIndex, field}
+            const scrollPositionRef = React.useRef(0); // 키보드 열기 전 스크롤 위치 저장
 
             useEffect(() => {
                 const recordsForDate = records.filter(r => r.date === selectedDate);
@@ -546,6 +547,9 @@
 
             // 커스텀 키보드 핸들러
             const openKeyboard = (recordId, setIndex, field, event) => {
+                // 키보드 열기 전 스크롤 위치 저장
+                scrollPositionRef.current = window.scrollY;
+
                 setKeyboardTarget({ recordId, setIndex, field });
                 setShowKeyboard(true);
 
@@ -576,6 +580,14 @@
             const closeKeyboard = () => {
                 setShowKeyboard(false);
                 setKeyboardTarget(null);
+
+                // 키보드 닫을 때 원래 스크롤 위치로 복구
+                setTimeout(() => {
+                    window.scrollTo({
+                        top: scrollPositionRef.current,
+                        behavior: 'smooth'
+                    });
+                }, 0);
             };
 
             const handleKeyboardInput = (value) => {
