@@ -402,7 +402,7 @@
             // 성장률에 따른 메시지 반환
             const getGrowthMessage = (growth) => {
                 if (growth < -5) return '오늘은 퇴보하는 날이었네요';
-                if (growth >= -4.9 && growth <= 0) return '오늘은 성장하지 못했습니다';
+                if (growth >= -5 && growth <= 0) return '오늘은 성장하지 못했습니다';
                 if (growth > 0 && growth < 1.5) return '미세하지만 좋은 시도였습니다';
                 if (growth >= 1.5 && growth < 3) return '근육이 성장하는 최적의 구간!';
                 if (growth >= 3 && growth < 5) return '근육에 강한 자극을 받았습니다.';
