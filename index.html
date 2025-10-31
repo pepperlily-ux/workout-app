@@ -534,9 +534,28 @@
             };
 
             // 커스텀 키보드 핸들러
-            const openKeyboard = (recordId, setIndex, field) => {
+            const openKeyboard = (recordId, setIndex, field, event) => {
                 setKeyboardTarget({ recordId, setIndex, field });
                 setShowKeyboard(true);
+
+                // 키보드가 렌더링된 후 입력 필드로 스크롤
+                setTimeout(() => {
+                    if (event && event.target) {
+                        const inputElement = event.target;
+                        const keyboardHeight = 280; // 대략적인 키보드 높이
+                        const inputRect = inputElement.getBoundingClientRect();
+                        const viewportHeight = window.innerHeight;
+
+                        // 입력 필드가 키보드에 가려지는지 확인
+                        if (inputRect.bottom > viewportHeight - keyboardHeight) {
+                            const scrollAmount = inputRect.bottom - (viewportHeight - keyboardHeight) + 20; // 20px 여유
+                            window.scrollBy({
+                                top: scrollAmount,
+                                behavior: 'smooth'
+                            });
+                        }
+                    }
+                }, 100);
             };
 
             const closeKeyboard = () => {
@@ -721,7 +740,7 @@
                                                         type="text"
                                                         inputMode="none"
                                                         value={set.weight || ''}
-                                                        onFocus={() => openKeyboard(record.id, index, 'weight')}
+                                                        onFocus={(e) => openKeyboard(record.id, index, 'weight', e)}
                                                         readOnly
                                                         placeholder="무게"
                                                         className={`flex-1 min-w-0 px-2 py-1 border rounded text-center ${
@@ -738,7 +757,7 @@
                                                         type="text"
                                                         inputMode="none"
                                                         value={set.reps || ''}
-                                                        onFocus={() => openKeyboard(record.id, index, 'reps')}
+                                                        onFocus={(e) => openKeyboard(record.id, index, 'reps', e)}
                                                         readOnly
                                                         placeholder="횟수"
                                                         className={`flex-1 min-w-0 px-2 py-1 border rounded text-center ${
