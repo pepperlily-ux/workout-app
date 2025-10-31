@@ -321,27 +321,6 @@
                 saveData(STORAGE_KEYS.CHECKED_SETS, checkedSets);
             }, [checkedSets]);
 
-            // 키보드가 열려있을 때 스크롤 고정
-            useEffect(() => {
-                if (showKeyboard) {
-                    // 현재 스크롤 위치 저장
-                    const scrollPosition = window.scrollY;
-
-                    // body 스크롤 막기
-                    document.body.style.position = 'fixed';
-                    document.body.style.top = `-${scrollPosition}px`;
-                    document.body.style.width = '100%';
-
-                    return () => {
-                        // 키보드 닫힐 때 원래대로 복구
-                        document.body.style.position = '';
-                        document.body.style.top = '';
-                        document.body.style.width = '';
-                        window.scrollTo(0, scrollPosition);
-                    };
-                }
-            }, [showKeyboard]);
-
             // 볼륨 계산
             const calculateVolume = (sets) => {
                 return sets.reduce((total, set) => total + (set.weight * set.reps), 0);
