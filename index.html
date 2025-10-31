@@ -559,7 +559,8 @@
                         const keyboardTop = viewportHeight - keyboardHeight;
 
                         // 입력 필드가 키보드에 가려지는지 확인
-                        if (inputRect.bottom > keyboardTop) {
+                        // 입력 필드 하단이 키보드보다 50px 이상 아래에 있을 때만 스크롤
+                        if (inputRect.bottom > keyboardTop + 50) {
                             // 입력 필드 하단을 키보드 위 50px에 위치시키기
                             const targetPosition = keyboardTop - 50;
                             const scrollAmount = inputRect.bottom - targetPosition;
