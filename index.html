@@ -93,7 +93,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-white">
     <!-- 스플래시 화면 -->
     <div id="splash-screen">
         <div class="splash-text">
@@ -102,7 +102,7 @@
         </div>
         <img class="splash-logo" src="icon-512.png" alt="메타몽" />
         <div class="splash-footer">Lily.</div>
-        <div class="splash-version">sw ver.64</div>
+        <div class="splash-version">sw ver.65</div>
     </div>
     
     <div id="root"></div>
@@ -563,32 +563,35 @@
                 setKeyboardTarget({ recordId, setIndex, field });
                 setShowKeyboard(true);
 
-                // 뷰포트 높이를 키보드 높이만큼 줄여서 스크롤 영역 제한
-                const keyboardHeight = 280;
-                // 키보드 높이 + 네비게이션 아래 여유 공간 확보
-                document.body.style.paddingBottom = `${keyboardHeight + 16}px`;
-
                 // overscroll(경계 넘어가는 bounce) 방지 - 일반 스크롤은 허용됨
                 document.documentElement.style.overscrollBehavior = 'none';
                 document.body.style.overscrollBehavior = 'none';
 
-                // 키보드가 렌더링된 후 입력 필드로 스크롤
-                if (event && event.target) {
-                    setTimeout(() => {
+                // 키보드가 렌더링된 후 실제 높이 측정 및 padding 적용
+                setTimeout(() => {
+                    const keyboardElement = document.querySelector('.fixed.bottom-0.z-50');
+                    if (keyboardElement) {
+                        const keyboardHeight = keyboardElement.offsetHeight;
+                        // 키보드 높이 + 여유 공간 8px (최소화)
+                        document.body.style.paddingBottom = `${keyboardHeight + 8}px`;
+                    }
+
+                    // 입력 필드로 스크롤
+                    if (event && event.target) {
                         const inputElement = event.target;
                         const inputRect = inputElement.getBoundingClientRect();
-                        const viewportHeight = window.innerHeight - keyboardHeight;
+                        const keyboardTop = keyboardElement ? window.innerHeight - keyboardElement.offsetHeight : window.innerHeight;
 
-                        // 입력 필드가 보이는 영역 밖에 있으면 스크롤
-                        if (inputRect.bottom > viewportHeight - 50) {
-                            const scrollAmount = inputRect.bottom - (viewportHeight - 50);
+                        // 입력 필드가 키보드에 가려지면 스크롤
+                        if (inputRect.bottom > keyboardTop - 50) {
+                            const scrollAmount = inputRect.bottom - (keyboardTop - 50);
                             window.scrollBy({
                                 top: scrollAmount,
                                 behavior: 'smooth'
                             });
                         }
-                    }, 150);
-                }
+                    }
+                }, 150);
             };
 
             const closeKeyboard = () => {
@@ -636,14 +639,33 @@
                     updateSet(recordId, setIndex, field, String(newValue));
                 } else {
                     // 숫자나 소수점 입력
-                    // 소수점 중복 입력 방지
+
+                    // 1. 횟수(reps)에 소수점 입력 방지
+                    if (value === '.' && field === 'reps') {
+                        return; // 횟수는 소수점 불가
+                    }
+
+                    // 2. 소수점이 맨 앞에 오지 않게
+                    if (value === '.' && (currentValue === '' || currentValue === '0')) {
+                        return; // .3 같은 입력 방지
+                    }
+
+                    // 3. 소수점 중복 입력 방지
                     if (value === '.' && currentValue.includes('.')) {
                         return; // 이미 소수점이 있으면 무시
                     }
+
                     const newValue = currentValue === '0' ? value : currentValue + value;
+
+                    // 4. 글자수 제한: 무게 4글자 (예: 99.5), 횟수 2글자
+                    const maxLength = field === 'weight' ? 4 : 2;
+                    if (newValue.length > maxLength) {
+                        return; // 글자수 초과 시 무시
+                    }
+
                     const numValue = parseFloat(newValue) || 0;
 
-                    // 최대값 제한: 무게 999kg, 횟수 99회
+                    // 5. 최대값 제한: 무게 999kg, 횟수 99회
                     const maxValue = field === 'weight' ? 999 : 99;
                     if (numValue > maxValue) {
                         return; // 최대값 초과 시 무시
@@ -661,7 +683,7 @@
             };
 
             return (
-                <div className="p-4">
+                <div className="p-4 pb-2">
                     {/* 날짜 표시 */}
                     <div className="mb-4 flex items-center justify-between">
                         <h1 className="text-2xl font-bold text-gray-800">
@@ -701,7 +723,7 @@
                                 ? 'bg-[#FAFFFB] border-[#78D2A8]'
                                 : routineGrowth.growth === 0
                                     ? 'bg-[#F3F1FA] border-[#D4CDEB]'
-                                    : 'bg-[#FFF9FA] border-[#F06B8A]'
+                                    : 'bg-[#FFF9FA] border-[#F06B8ACC]'
                         }`}>
                             <div className="flex items-center justify-between mb-1">
                                 <div className="text-base font-medium text-gray-700">
@@ -712,7 +734,7 @@
                                         ? 'text-[#2D9C61]'
                                         : routineGrowth.growth === 0
                                             ? 'text-[#847DC4]'
-                                            : 'text-[#E75D7D]'
+                                            : 'text-[#E75D7DCC]'
                                 }`}>
                                     {routineGrowth.growth >= 0 ? '+' : ''}{routineGrowth.growth.toFixed(1)}%
                                 </span>
@@ -1169,9 +1191,23 @@
                                     </button>
                                 </div>
                             ) : (
-                                <div className="text-center py-8">
-                                    <img src="angry.png" alt="운동 기록 없음" className="mx-auto mb-4" style={{maxWidth: '160px'}} />
-                                    <p className="text-gray-400">왜 운동 안하냐몽!?</p>
+                                <div className="flex flex-col justify-between" style={{minHeight: '270px'}}>
+                                    <div className="text-center pt-5">
+                                        <img src="angry.png" alt="운동 기록 없음" className="mx-auto mb-4" style={{maxWidth: '160px'}} />
+                                        <p className="text-gray-400">왜 운동 안하냐몽!?</p>
+                                    </div>
+
+                                    {/* 편집 버튼 */}
+                                    <button
+                                        onClick={() => {
+                                            const dateStr = formatDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDay));
+                                            setSelectedDate(dateStr);
+                                            setCurrentPage('home');
+                                        }}
+                                        className="w-full bg-[#A295D5] text-white py-3 rounded-lg font-medium hover:bg-[#8E7FC4]"
+                                    >
+                                        이 날짜 편집하기
+                                    </button>
                                 </div>
                             )}
                         </div>
