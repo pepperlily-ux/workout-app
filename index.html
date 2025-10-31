@@ -546,31 +546,41 @@
 
             // 커스텀 키보드 핸들러
             const openKeyboard = (recordId, setIndex, field, event) => {
-                setKeyboardTarget({ recordId, setIndex, field });
-                setShowKeyboard(true);
+                // 키보드 열기 전에 입력 필드 위치 확인
+                if (event && event.target) {
+                    const inputElement = event.target;
+                    const keyboardHeight = 280; // 대략적인 키보드 높이
+                    const inputRect = inputElement.getBoundingClientRect();
+                    const viewportHeight = window.innerHeight;
+                    const keyboardTop = viewportHeight - keyboardHeight;
 
-                // 키보드가 렌더링된 후 입력 필드로 스크롤
-                setTimeout(() => {
-                    if (event && event.target) {
-                        const inputElement = event.target;
-                        const keyboardHeight = 280; // 대략적인 키보드 높이
-                        const inputRect = inputElement.getBoundingClientRect();
-                        const viewportHeight = window.innerHeight;
-                        const keyboardTop = viewportHeight - keyboardHeight;
+                    // 입력 필드가 키보드 위의 보이는 영역에 완전히 들어가는지 확인
+                    const isFieldVisible = inputRect.top >= 0 && inputRect.bottom <= keyboardTop - 20;
 
-                        // 입력 필드가 키보드 위의 보이는 영역에 완전히 들어가는지 확인
-                        // 입력 필드 하단이 키보드에 가려지거나, 상단이 화면 밖에 있으면 스크롤
-                        const isFieldVisible = inputRect.top >= 0 && inputRect.bottom <= keyboardTop - 20;
+                    console.log('Field position:', {
+                        top: inputRect.top,
+                        bottom: inputRect.bottom,
+                        keyboardTop: keyboardTop,
+                        isVisible: isFieldVisible
+                    });
 
-                        if (!isFieldVisible) {
+                    setKeyboardTarget({ recordId, setIndex, field });
+                    setShowKeyboard(true);
+
+                    // 필드가 가려질 경우에만 스크롤
+                    if (!isFieldVisible) {
+                        setTimeout(() => {
                             const scrollAmount = inputRect.bottom - keyboardTop + 20; // 20px 여유
                             window.scrollBy({
                                 top: scrollAmount,
                                 behavior: 'smooth'
                             });
-                        }
+                        }, 150);
                     }
-                }, 150);
+                } else {
+                    setKeyboardTarget({ recordId, setIndex, field });
+                    setShowKeyboard(true);
+                }
             };
 
             const closeKeyboard = () => {
