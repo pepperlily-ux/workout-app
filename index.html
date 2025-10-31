@@ -555,7 +555,8 @@
                     const keyboardTop = viewportHeight - keyboardHeight;
 
                     // 입력 필드가 키보드 위의 보이는 영역에 완전히 들어가는지 확인
-                    const isFieldVisible = inputRect.top >= 0 && inputRect.bottom <= keyboardTop - 20;
+                    // 100px 여유를 두어 입력 필드가 충분히 보이는 경우에만 스크롤하지 않음
+                    const isFieldVisible = inputRect.top >= 0 && inputRect.bottom <= keyboardTop - 100;
 
                     console.log('Field position:', {
                         top: inputRect.top,
