@@ -321,6 +321,29 @@
                 saveData(STORAGE_KEYS.CHECKED_SETS, checkedSets);
             }, [checkedSets]);
 
+            // 키보드가 열려있을 때 과도한 스크롤 방지
+            useEffect(() => {
+                if (showKeyboard) {
+                    // 현재 스크롤 위치 저장
+                    const currentScroll = window.scrollY;
+                    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+
+                    // 스크롤 이벤트 리스너 추가
+                    const handleScroll = () => {
+                        const currentMaxScroll = document.documentElement.scrollHeight - window.innerHeight;
+                        if (window.scrollY > currentMaxScroll) {
+                            window.scrollTo(0, currentMaxScroll);
+                        }
+                    };
+
+                    window.addEventListener('scroll', handleScroll);
+
+                    return () => {
+                        window.removeEventListener('scroll', handleScroll);
+                    };
+                }
+            }, [showKeyboard]);
+
             // 볼륨 계산
             const calculateVolume = (sets) => {
                 return sets.reduce((total, set) => total + (set.weight * set.reps), 0);
