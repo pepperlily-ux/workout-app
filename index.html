@@ -770,7 +770,7 @@
                                                         onFocus={(e) => openKeyboard(record.id, index, 'weight', e)}
                                                         readOnly
                                                         placeholder="무게"
-                                                        className={`flex-1 min-w-0 px-2 py-1 border rounded text-center ${
+                                                        className={`flex-1 min-w-0 px-2 py-1 border rounded text-center focus:outline-none focus:border-[#A295D5] focus:border-2 focus:bg-[#F3F1FA] ${
                                                             keyboardTarget?.recordId === record.id &&
                                                             keyboardTarget?.setIndex === index &&
                                                             keyboardTarget?.field === 'weight'
@@ -787,7 +787,7 @@
                                                         onFocus={(e) => openKeyboard(record.id, index, 'reps', e)}
                                                         readOnly
                                                         placeholder="횟수"
-                                                        className={`flex-1 min-w-0 px-2 py-1 border rounded text-center ${
+                                                        className={`flex-1 min-w-0 px-2 py-1 border rounded text-center focus:outline-none focus:border-[#A295D5] focus:border-2 focus:bg-[#F3F1FA] ${
                                                             keyboardTarget?.recordId === record.id &&
                                                             keyboardTarget?.setIndex === index &&
                                                             keyboardTarget?.field === 'reps'
