@@ -110,7 +110,7 @@
         </div>
         <img class="splash-logo" src="icon-512.png" alt="메타몽" />
         <div class="splash-footer">Lily.</div>
-        <div class="splash-version">sw ver.66</div>
+        <div class="splash-version">sw ver.67</div>
     </div>
     
     <div id="root"></div>
@@ -124,6 +124,15 @@
             RECORDS: 'workout_records',
             ROUTINES: 'workout_routines',
             CHECKED_SETS: 'metamong-checked-sets'
+        };
+
+        // 입력 필드 제한 상수
+        const LIMITS = {
+            weightMax: 999,        // 무게 최대값 (kg)
+            repsMax: 99,           // 횟수 최대값 (회)
+            weightLen: 5,          // 무게 입력 최대 글자수 (999.9)
+            repsLen: 2,            // 횟수 입력 최대 글자수 (99)
+            weightDecimals: 1      // 무게 소수점 자릿수
         };
 
         // 데이터 로드 및 저장 함수
@@ -319,6 +328,7 @@
             const longPressTimerRef = React.useRef(null);
             const [showKeyboard, setShowKeyboard] = useState(false);
             const [keyboardTarget, setKeyboardTarget] = useState(null); // {recordId, setIndex, field}
+            const [isFirstInput, setIsFirstInput] = useState(true); // 포커스 후 첫 입력 여부
             const scrollPositionRef = React.useRef(0); // 키보드 열기 전 스크롤 위치 저장
 
             useEffect(() => {
@@ -454,10 +464,37 @@
             const handleExerciseSelect = (exerciseId) => {
                 const exists = dateRecords.find(r => r.exerciseId === exerciseId);
                 if (!exists) {
+                    // 직전 기록 찾기
+                    const previousRecords = records
+                        .filter(r => r.exerciseId === exerciseId && r.date < selectedDate && r.sets && r.sets.length > 0)
+                        .sort((a, b) => b.date.localeCompare(a.date));
+
+                    // 기본 4세트 생성
+                    const defaultSets = [];
+                    for (let i = 0; i < 4; i++) {
+                        let defaultSet = { weight: 0, reps: 0 };
+
+                        // 직전 기록이 있고 해당 세트가 있으면 가져오기
+                        if (previousRecords.length > 0 && previousRecords[0].sets[i]) {
+                            defaultSet = {
+                                weight: previousRecords[0].sets[i].weight,
+                                reps: previousRecords[0].sets[i].reps
+                            };
+                        } else if (i > 0) {
+                            // 직전 기록에 해당 세트가 없으면 바로 이전 세트 복사
+                            defaultSet = {
+                                weight: defaultSets[i-1].weight,
+                                reps: defaultSets[i-1].reps
+                            };
+                        }
+
+                        defaultSets.push(defaultSet);
+                    }
+
                     addRecord({
                         date: selectedDate,
                         exerciseId: exerciseId,
-                        sets: []
+                        sets: defaultSets
                     });
                 }
                 setShowExerciseModal(false);
@@ -466,23 +503,27 @@
             const addSet = (recordId) => {
                 const record = dateRecords.find(r => r.id === recordId);
                 let defaultSet = { weight: 0, reps: 0 };
-                
-                // 이미 세트가 있으면 마지막 세트 복사 (기존 로직 유지)
-                if (record.sets && record.sets.length > 0) {
+
+                // 직전 기록 찾기
+                const previousRecords = records
+                    .filter(r => r.exerciseId === record.exerciseId && r.date < selectedDate && r.sets && r.sets.length > 0)
+                    .sort((a, b) => b.date.localeCompare(a.date));
+
+                // 추가할 세트의 인덱스 (현재 세트 개수 = 다음 세트 인덱스)
+                const nextSetIndex = record.sets ? record.sets.length : 0;
+
+                // 직전 기록에서 해당 세트가 있으면 가져오기
+                if (previousRecords.length > 0 && previousRecords[0].sets[nextSetIndex]) {
+                    defaultSet = {
+                        weight: previousRecords[0].sets[nextSetIndex].weight,
+                        reps: previousRecords[0].sets[nextSetIndex].reps
+                    };
+                } else if (record.sets && record.sets.length > 0) {
+                    // 직전 기록에 해당 세트가 없으면 마지막 세트 복사
                     const lastSet = record.sets[record.sets.length - 1];
                     defaultSet = { weight: lastSet.weight, reps: lastSet.reps };
-                } else {
-                    // 첫 세트 추가할 때만 직전 기록에서 가져오기
-                    const previousRecords = records
-                        .filter(r => r.exerciseId === record.exerciseId && r.date < selectedDate && r.sets && r.sets.length > 0)
-                        .sort((a, b) => b.date.localeCompare(a.date));
-                    
-                    if (previousRecords.length > 0 && previousRecords[0].sets.length > 0) {
-                        const previousFirstSet = previousRecords[0].sets[0];
-                        defaultSet = { weight: previousFirstSet.weight, reps: previousFirstSet.reps };
-                    }
                 }
-                
+
                 const newSets = [...(record.sets || []), defaultSet];
                 updateRecord(recordId, { sets: newSets });
             };
@@ -570,6 +611,7 @@
             const openKeyboard = (recordId, setIndex, field, event) => {
                 setKeyboardTarget({ recordId, setIndex, field });
                 setShowKeyboard(true);
+                setIsFirstInput(true); // 포커스 시 첫 입력 상태로 설정
 
                 // overscroll(경계 넘어가는 bounce) 방지 - 일반 스크롤은 허용됨
                 document.documentElement.style.overscrollBehavior = 'none';
@@ -603,6 +645,21 @@
             };
 
             const closeKeyboard = () => {
+                // 현재 필드 값 정리 (마지막이 "."이면 제거)
+                if (keyboardTarget) {
+                    const { recordId, setIndex, field } = keyboardTarget;
+                    const record = dateRecords.find(r => r.id === recordId);
+                    const currentValue = String(record?.sets?.[setIndex]?.[field] || '');
+
+                    if (currentValue.endsWith('.')) {
+                        updateRecord(recordId, {
+                            sets: record.sets.map((set, idx) =>
+                                idx === setIndex ? { ...set, [field]: currentValue.slice(0, -1) || '0' } : set
+                            )
+                        });
+                    }
+                }
+
                 setShowKeyboard(false);
                 setKeyboardTarget(null);
 
@@ -622,15 +679,23 @@
                 if (value === 'backspace') {
                     const newValue = currentValue.slice(0, -1);
                     updateSet(recordId, setIndex, field, newValue || '0');
+                    setIsFirstInput(false); // backspace는 첫 입력 아님
                 } else if (value === 'next') {
+                    // 현재 필드 값 정리 (마지막이 "."이면 제거)
+                    if (currentValue.endsWith('.')) {
+                        updateSet(recordId, setIndex, field, currentValue.slice(0, -1) || '0');
+                    }
+
                     // 다음 입력으로 이동
                     if (field === 'weight') {
                         setKeyboardTarget({ recordId, setIndex, field: 'reps' });
+                        setIsFirstInput(true); // 다른 필드로 이동 시 첫 입력 상태
                     } else {
                         // 다음 세트나 닫기
                         const nextSetIndex = setIndex + 1;
                         if (record.sets[nextSetIndex]) {
                             setKeyboardTarget({ recordId, setIndex: nextSetIndex, field: 'weight' });
+                            setIsFirstInput(true); // 다음 세트로 이동 시 첫 입력 상태
                         } else {
                             closeKeyboard();
                         }
@@ -640,64 +705,65 @@
                     const delta = parseFloat(value);
                     let newValue = Math.max(0, currentNum + delta);
 
-                    // 최대값 제한: 무게 999kg, 횟수 99회
-                    const maxValue = field === 'weight' ? 999 : 99;
+                    // 최대값 제한
+                    const maxValue = field === 'weight' ? LIMITS.weightMax : LIMITS.repsMax;
                     newValue = Math.min(newValue, maxValue);
 
                     updateSet(recordId, setIndex, field, String(newValue));
+                    setIsFirstInput(false); // +/- 버튼은 첫 입력 아님
                 } else {
                     // 숫자나 소수점 입력
-                    const maxLength = field === 'weight' ? 5 : 2;
-
-                    // 1. 숫자 버튼(0-9) 입력 시, 최대 자릿수 도달했으면 기존 값 지우고 새로 시작 (횟수만)
+                    const maxLength = field === 'weight' ? LIMITS.weightLen : LIMITS.repsLen;
                     const isNumberKey = /^[0-9]$/.test(value);
-                    const isMaxLength = currentValue.length >= maxLength;
 
-                    if (isNumberKey && isMaxLength && field === 'reps') {
-                        // 횟수만: 최대 자릿수 도달 + 숫자 입력 = 기존 값 지우고 새로 시작
-                        updateSet(recordId, setIndex, field, value);
-                        return;
-                    }
+                    // 첫 입력이고 숫자 키이고 값이 있으면 → 기존 값 지우고 새로 시작 (검증 전에 먼저 체크)
+                    let finalValue;
+                    if (isFirstInput && isNumberKey && currentValue !== '' && currentValue !== '0') {
+                        finalValue = value;
+                    } else {
+                        // 첫 입력이 아니면 검증 로직 적용
 
-                    // 2. 횟수(reps)에 소수점 입력 방지
-                    if (value === '.' && field === 'reps') {
-                        return; // 횟수는 소수점 불가
-                    }
-
-                    // 3. 소수점이 맨 앞에 오지 않게
-                    if (value === '.' && (currentValue === '' || currentValue === '0')) {
-                        return; // .3 같은 입력 방지
-                    }
-
-                    // 4. 소수점 중복 입력 방지
-                    if (value === '.' && currentValue.includes('.')) {
-                        return; // 이미 소수점이 있으면 무시
-                    }
-
-                    // 5. 소수점 자릿수 제한 (weight만, 소수점 한 자리까지)
-                    if (field === 'weight' && currentValue.includes('.')) {
-                        const decimalPart = currentValue.split('.')[1];
-                        if (decimalPart && decimalPart.length >= 1 && value !== 'backspace') {
-                            return; // 소수점 이하 1자리 초과 방지
+                        // 횟수(reps)에 소수점 입력 방지
+                        if (value === '.' && field === 'reps') {
+                            return; // 횟수는 소수점 불가
                         }
+
+                        // 소수점이 맨 앞에 오지 않게
+                        if (value === '.' && (currentValue === '' || currentValue === '0')) {
+                            return; // .3 같은 입력 방지
+                        }
+
+                        // 소수점 중복 입력 방지
+                        if (value === '.' && currentValue.includes('.')) {
+                            return; // 이미 소수점이 있으면 무시
+                        }
+
+                        // 소수점 자릿수 제한 (weight만)
+                        if (field === 'weight' && currentValue.includes('.')) {
+                            const decimalPart = currentValue.split('.')[1];
+                            if (decimalPart && decimalPart.length >= LIMITS.weightDecimals && value !== 'backspace') {
+                                return; // 소수점 이하 자릿수 초과 방지
+                            }
+                        }
+
+                        finalValue = currentValue === '0' ? value : currentValue + value;
                     }
 
-                    const newValue = currentValue === '0' ? value : currentValue + value;
-
-                    // 6. 글자수 제한 체크
-                    if (newValue.length > maxLength) {
+                    // 글자수 제한 체크
+                    if (finalValue.length > maxLength) {
                         return; // 글자수 초과 시 무시
                     }
 
-                    const numValue = parseFloat(newValue) || 0;
+                    const numValue = parseFloat(finalValue) || 0;
 
-                    // 7. 최대값 제한: 무게 500kg, 횟수 99회
-                    const maxValue = field === 'weight' ? 500 : 99;
+                    // 최대값 제한
+                    const maxValue = field === 'weight' ? LIMITS.weightMax : LIMITS.repsMax;
                     if (numValue > maxValue) {
                         return; // 최대값 초과 시 무시
                     }
 
-                    updateSet(recordId, setIndex, field, newValue);
+                    updateSet(recordId, setIndex, field, finalValue);
+                    setIsFirstInput(false); // 입력 후 첫 입력 아님으로 변경
                 }
             };
 
@@ -1997,7 +2063,8 @@
         }
 
         // 앱 렌더링
-        ReactDOM.render(<App />, document.getElementById('root'));
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
         
         // 스플래시 화면 숨기기 (1.5초 후)
         setTimeout(() => {
