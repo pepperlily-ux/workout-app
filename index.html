@@ -110,7 +110,7 @@
         </div>
         <img class="splash-logo" src="icon-512.png" alt="메타몽" />
         <div class="splash-footer">Lily.</div>
-        <div class="splash-version">sw ver.68</div>
+        <div class="splash-version">sw ver.69</div>
     </div>
     
     <div id="root"></div>
@@ -348,6 +348,13 @@
             useEffect(() => {
                 saveData(STORAGE_KEYS.CHECKED_SETS, checkedSets);
             }, [checkedSets]);
+
+            // 날짜가 비어있으면 오늘로 자동 복구
+            useEffect(() => {
+                if (!selectedDate || selectedDate === '') {
+                    setSelectedDate(formatDate(new Date()));
+                }
+            }, [selectedDate]);
 
             // 볼륨 계산
             const calculateVolume = (sets) => {
