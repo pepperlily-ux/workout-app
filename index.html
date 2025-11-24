@@ -110,7 +110,7 @@
         </div>
         <img class="splash-logo" src="icon-512.png" alt="메타몽" />
         <div class="splash-footer">Lily.</div>
-        <div class="splash-version">sw ver.69</div>
+        <div class="splash-version">sw ver.70</div>
     </div>
     
     <div id="root"></div>
@@ -456,12 +456,30 @@
                 // 루틴의 운동들을 오늘 기록에 한 번에 추가
                 const newRecords = routine.exerciseIds
                     .filter(exerciseId => !dateRecords.find(r => r.exerciseId === exerciseId))
-                    .map(exerciseId => ({
-                        date: selectedDate,
-                        exerciseId: exerciseId,
-                        sets: []
-                    }));
-                
+                    .map(exerciseId => {
+                        // 각 운동의 직전 기록 찾기
+                        const previousRecords = records
+                            .filter(r => r.exerciseId === exerciseId && r.date < selectedDate && r.sets && r.sets.length > 0)
+                            .sort((a, b) => b.date.localeCompare(a.date));
+
+                        let defaultSets = [];
+
+                        // 직전 기록이 있으면 해당 세트 수만큼 복사
+                        if (previousRecords.length > 0) {
+                            defaultSets = previousRecords[0].sets.map(set => ({
+                                weight: set.weight,
+                                reps: set.reps
+                            }));
+                        }
+                        // 직전 기록이 없으면 빈 배열 (세트 없음)
+
+                        return {
+                            date: selectedDate,
+                            exerciseId: exerciseId,
+                            sets: defaultSets
+                        };
+                    });
+
                 if (newRecords.length > 0) {
                     addRecords(newRecords);
                 }
@@ -476,27 +494,16 @@
                         .filter(r => r.exerciseId === exerciseId && r.date < selectedDate && r.sets && r.sets.length > 0)
                         .sort((a, b) => b.date.localeCompare(a.date));
 
-                    // 기본 4세트 생성
-                    const defaultSets = [];
-                    for (let i = 0; i < 4; i++) {
-                        let defaultSet = { weight: 0, reps: 0 };
+                    let defaultSets = [];
 
-                        // 직전 기록이 있고 해당 세트가 있으면 가져오기
-                        if (previousRecords.length > 0 && previousRecords[0].sets[i]) {
-                            defaultSet = {
-                                weight: previousRecords[0].sets[i].weight,
-                                reps: previousRecords[0].sets[i].reps
-                            };
-                        } else if (i > 0) {
-                            // 직전 기록에 해당 세트가 없으면 바로 이전 세트 복사
-                            defaultSet = {
-                                weight: defaultSets[i-1].weight,
-                                reps: defaultSets[i-1].reps
-                            };
-                        }
-
-                        defaultSets.push(defaultSet);
+                    // 직전 기록이 있으면 해당 세트 수만큼 복사
+                    if (previousRecords.length > 0) {
+                        defaultSets = previousRecords[0].sets.map(set => ({
+                            weight: set.weight,
+                            reps: set.reps
+                        }));
                     }
+                    // 직전 기록이 없으면 빈 배열 (세트 없음)
 
                     addRecord({
                         date: selectedDate,
@@ -909,7 +916,9 @@
                                             </svg>
                                         </button>
                                         {growth && (
-                                            <div className={`ml-auto px-1 py-0.5 rounded-full border ${
+                                            <button
+                                                onClick={() => setSelectedExercise(exercise)}
+                                                className={`ml-auto px-1 py-0.5 rounded-full border cursor-pointer hover:opacity-80 ${
                                                 growth.growth > 0
                                                     ? 'bg-[#FAFFFB] border-[#78D2A8] text-[#2D9C61]'
                                                     : growth.growth === 0
@@ -919,7 +928,7 @@
                                                 <span className="text-sm font-bold">
                                                     {growth.growth >= 0 ? '+' : ''}{growth.growth.toFixed(1)}%
                                                 </span>
-                                            </div>
+                                            </button>
                                         )}
                                     </div>
 
@@ -1086,6 +1095,34 @@
                                 >
                                     저장
                                 </button>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {/* 운동 히스토리 모달 */}
+                    {selectedExercise && (
+                        <Modal onClose={() => setSelectedExercise(null)} title={<span className="inline-flex items-center"><span className="text-gray-800">{`${selectedExercise.name} 히스토리`}</span></span>}>
+                            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                                {getExerciseHistory(selectedExercise.id).map(record => (
+                                    <div key={record.id} className="bg-gray-50 p-4 rounded-lg">
+                                        <div className="font-bold text-gray-800 mb-2">
+                                            {formatDateKorean(record.date)}
+                                        </div>
+                                        <div className="space-y-1">
+                                            {record.sets.map((set, index) => (
+                                                <div key={index} className="text-sm text-gray-700">
+                                                    세트 {index + 1}: {set.weight}kg × {set.reps}회
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="text-sm text-gray-500 mt-2">
+                                            총 볼륨: {calculateVolume(record.sets).toLocaleString()}kg
+                                        </div>
+                                    </div>
+                                ))}
+                                {getExerciseHistory(selectedExercise.id).length === 0 && (
+                                    <p className="text-center text-gray-400 py-8">기록이 없습니다</p>
+                                )}
                             </div>
                         </Modal>
                     )}
@@ -1927,7 +1964,7 @@
 
                     {deleteConfirm && (
                         <ConfirmModal
-                            message="운동 데이터를 삭제하시겠습니까?&#10;삭제 후에는 복구할 수 없습니다."
+                            message="운동 데이터를 삭제하시겠습니까?&#10;&#10;삭제 후에는 복구할 수 없습니다."
                             onConfirm={confirmDeleteExercise}
                             onCancel={() => setDeleteConfirm(null)}
                         />
