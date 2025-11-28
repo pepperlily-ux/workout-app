@@ -1,5 +1,5 @@
 // Service Worker - PWA 설치를 위한 필수 파일
-const CACHE_NAME = 'metamong-v71';
+const CACHE_NAME = 'metamong-v72';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -40,19 +40,40 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch
+// Fetch - Network First 전략 (HTML은 항상 최신 버전 가져오기)
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
+  const url = new URL(event.request.url);
+
+  // HTML 파일은 네트워크 우선
+  if (url.pathname.endsWith('.html') || url.pathname === '/') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // 네트워크 성공 시 캐시 업데이트
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseClone);
+          });
           return response;
-        }
-        return fetch(event.request).catch(error => {
-          // 네트워크 요청 실패 시 (이미지 등) 조용히 실패
-          console.log('Fetch failed for:', event.request.url);
-          return new Response('', { status: 404, statusText: 'Not Found' });
-        });
-      })
-  );
+        })
+        .catch(() => {
+          // 네트워크 실패 시에만 캐시 사용
+          return caches.match(event.request);
+        })
+    );
+  } else {
+    // 이미지, CSS 등은 캐시 우선
+    event.respondWith(
+      caches.match(event.request)
+        .then(response => {
+          if (response) {
+            return response;
+          }
+          return fetch(event.request).catch(error => {
+            console.log('Fetch failed for:', event.request.url);
+            return new Response('', { status: 404, statusText: 'Not Found' });
+          });
+        })
+    );
+  }
 });
