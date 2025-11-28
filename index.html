@@ -110,7 +110,7 @@
         </div>
         <img class="splash-logo" src="icon-512.png" alt="메타몽" />
         <div class="splash-footer">Lily.</div>
-        <div class="splash-version">sw ver.73</div>
+        <div class="splash-version">sw ver.74</div>
     </div>
     
     <div id="root"></div>
@@ -364,6 +364,13 @@
                     const reps = parseFloat(set.reps) || 0;
                     return total + (weight * reps);
                 }, 0);
+            };
+
+            // 운동 히스토리 조회
+            const getExerciseHistory = (exerciseId) => {
+                return records
+                    .filter(r => r.exerciseId === exerciseId && r.sets && r.sets.length > 0)
+                    .sort((a, b) => b.date.localeCompare(a.date));
             };
 
             // 각 운동의 직전 기록 대비 성장률 계산
