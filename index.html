@@ -110,7 +110,7 @@
         </div>
         <img class="splash-logo" src="icon-512.png" alt="메타몽" />
         <div class="splash-footer">Lily.</div>
-        <div class="splash-version">sw ver.72</div>
+        <div class="splash-version">sw ver.73</div>
     </div>
     
     <div id="root"></div>
@@ -330,6 +330,7 @@
             const [keyboardTarget, setKeyboardTarget] = useState(null); // {recordId, setIndex, field}
             const [isFirstInput, setIsFirstInput] = useState(true); // 포커스 후 첫 입력 여부
             const scrollPositionRef = React.useRef(0); // 키보드 열기 전 스크롤 위치 저장
+            const [selectedExercise, setSelectedExercise] = useState(null); // 히스토리 모달용
 
             useEffect(() => {
                 const recordsForDate = records.filter(r => r.date === selectedDate);
