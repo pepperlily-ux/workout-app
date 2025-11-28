@@ -110,7 +110,7 @@
         </div>
         <img class="splash-logo" src="icon-512.png" alt="메타몽" />
         <div class="splash-footer">Lily.</div>
-        <div class="splash-version">sw ver.70</div>
+        <div class="splash-version">sw ver.71</div>
     </div>
     
     <div id="root"></div>
@@ -2127,8 +2127,7 @@
         }
 
         // 앱 렌더링
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.render(<App />, document.getElementById('root'));
         
         // 스플래시 화면 숨기기 (1.5초 후)
         setTimeout(() => {
