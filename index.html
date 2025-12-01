@@ -114,7 +114,7 @@
         </div>
         <img class="splash-logo" src="icon-512.png" alt="메타몽" />
         <div class="splash-footer">Lily.</div>
-        <div class="splash-version">sw ver.76</div>
+        <div class="splash-version">sw ver.77</div>
     </div>
     
     <div id="root"></div>
@@ -965,14 +965,23 @@
                                 <div key={record.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                                     {/* 운동 헤더 */}
                                     <div className="flex items-center mb-3 gap-2 min-w-0">
-                                        <h3 className="text-lg font-bold text-gray-800 truncate shrink min-w-0">{exercise.name}</h3>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedRecordForDifficulty(record);
+                                                setShowDifficultyModal(true);
+                                            }}
+                                            className="text-lg font-bold text-gray-800 truncate shrink min-w-0 cursor-pointer hover:text-[#A295D5] transition-colors text-left"
+                                        >
+                                            {exercise.name}
+                                        </button>
                                         {(() => {
                                             // 현재 난이도가 있으면 표시 (보라색 - 사용자가 선택함)
                                             if (record.difficulty) {
                                                 const diffInfo = getDifficultyInfo(record.difficulty);
                                                 return (
                                                     <button
-                                                        onClick={() => {
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
                                                             setSelectedRecordForDifficulty(record);
                                                             setShowDifficultyModal(true);
                                                         }}
@@ -991,7 +1000,8 @@
                                                     const diffInfo = getDifficultyInfo(previousRecord.difficulty);
                                                     return (
                                                         <button
-                                                            onClick={() => {
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 setSelectedRecordForDifficulty(record);
                                                                 setShowDifficultyModal(true);
                                                             }}
@@ -1001,25 +1011,17 @@
                                                         />
                                                     );
                                                 } else {
-                                                    // 직전 운동도 없으면 플레이스홀더 (실선)
-                                                    return (
-                                                        <button
-                                                            onClick={() => {
-                                                                setSelectedRecordForDifficulty(record);
-                                                                setShowDifficultyModal(true);
-                                                            }}
-                                                            className="ml-auto flex items-center gap-1 px-2 bg-white rounded-full border border-gray-300 text-gray-400 cursor-pointer hover:border-gray-400 hover:text-gray-500 shrink-0"
-                                                            style={{height: '28px'}}
-                                                        >
-                                                            <span className="text-sm font-normal max-[450px]:hidden">난이도</span>
-                                                        </button>
-                                                    );
+                                                    // 직전 운동도 없으면 아무것도 표시하지 않음
+                                                    return null;
                                                 }
                                             }
                                         })()}
                                         {growth && (
                                             <button
-                                                onClick={() => setSelectedExercise(exercise)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedExercise(exercise);
+                                                }}
                                                 className={`ml-2 flex items-center px-1 py-0.5 rounded-full border cursor-pointer hover:opacity-80 shrink-0 ${
                                                 growth.growth > 0
                                                     ? 'bg-[#FAFFFB] border-[#78D2A8] text-[#2D9C61]'
@@ -2105,7 +2107,7 @@
                                         <div className="flex items-center gap-2">
                                             <span className="font-bold text-gray-800">{exercise.name}</span>
                                             {exerciseCount > 0 && (
-                                                <span className="inline-flex items-center justify-center min-w-[24px] h-[24px] px-2 bg-gray-200 text-gray-600 text-xs font-medium rounded-full">
+                                                <span className="inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 bg-gray-100 text-gray-500 text-xs font-medium rounded-full">
                                                     {exerciseCount}
                                                 </span>
                                             )}
