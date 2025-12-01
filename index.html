@@ -356,6 +356,7 @@
             const [selectedExercise, setSelectedExercise] = useState(null); // 히스토리 모달용
             const [showDifficultyModal, setShowDifficultyModal] = useState(false); // 난이도 선택 모달
             const [selectedRecordForDifficulty, setSelectedRecordForDifficulty] = useState(null); // 난이도 설정할 record
+            const [showGrowthDetailModal, setShowGrowthDetailModal] = useState(false); // 성장률 상세 모달
 
             useEffect(() => {
                 const recordsForDate = records.filter(r => r.date === selectedDate);
@@ -418,57 +419,72 @@
                 return { growth, previousDate: previousRecords[0].date };
             };
 
-            // 루틴 전체 성장률 계산 (공통 운동 3개 이상일 때)
+            // 루틴 전체 성장률 계산 (각 운동별 최근 기록 비교)
             const getRoutineGrowth = () => {
-                // 운동 기록이 없거나, 세트가 있는 운동이 없으면 null 반환
-                const recordsWithSets = dateRecords.filter(r => r.sets && r.sets.length > 0);
+                // 1. 현재 날짜의 세트가 있고 볼륨이 0이 아닌 운동들 필터링
+                const recordsWithSets = dateRecords.filter(r => {
+                    if (!r.sets || r.sets.length === 0) return false;
+                    const volume = calculateVolume(r.sets);
+                    return volume > 0;
+                });
+
                 if (recordsWithSets.length === 0) return null;
 
-                const currentExerciseIds = recordsWithSets.map(r => r.exerciseId).sort();
+                // 2. 각 운동별로 가장 최근 기록 찾기 및 비교
+                const comparisons = [];
+                let totalCurrentVolume = 0;
+                let totalPreviousVolume = 0;
+                let mostRecentComparisonDate = null;
 
-                // 과거 날짜들을 순회
-                const dates = [...new Set(records.map(r => r.date))].filter(d => d < selectedDate).sort().reverse();
-                
-                for (const date of dates) {
-                    const pastDateRecords = records.filter(r => r.date === date);
-                    const pastExerciseIds = pastDateRecords.map(r => r.exerciseId).sort();
-                    
-                    // 공통 운동 찾기
-                    const commonExerciseIds = currentExerciseIds.filter(id => pastExerciseIds.includes(id));
-                    
-                    if (commonExerciseIds.length === 0) continue;
-                    
-                    // 조건 1: 완전히 동일한 운동 조합 (개수와 종류 모두 같음)
-                    const isExactMatch = currentExerciseIds.length === pastExerciseIds.length && 
-                                        currentExerciseIds.length === commonExerciseIds.length;
-                    
-                    // 조건 2: 부분적으로 겹치지만 공통 운동이 2개 이상
-                    const hasEnoughCommon = !isExactMatch && commonExerciseIds.length >= 2;
-                    
-                    // 둘 중 하나라도 만족하면 비교
-                    if (isExactMatch || hasEnoughCommon) {
-                        // 현재 날짜 공통 운동들의 볼륨 계산
-                        const currentCommonVolume = recordsWithSets
-                            .filter(r => commonExerciseIds.includes(r.exerciseId))
-                            .reduce((total, record) => {
-                                return total + calculateVolume(record.sets);
-                            }, 0);
+                for (const currentRecord of recordsWithSets) {
+                    const currentVolume = calculateVolume(currentRecord.sets);
 
-                        // 과거 공통 운동들의 볼륨 계산
-                        const previousCommonVolume = pastDateRecords
-                            .filter(r => commonExerciseIds.includes(r.exerciseId) && r.sets && r.sets.length > 0)
-                            .reduce((total, record) => {
-                                return total + calculateVolume(record.sets);
-                            }, 0);
+                    // 과거 기록 중 가장 최근 기록 찾기
+                    const previousRecords = records
+                        .filter(r =>
+                            r.exerciseId === currentRecord.exerciseId &&
+                            r.date < selectedDate &&
+                            r.sets &&
+                            r.sets.length > 0
+                        )
+                        .sort((a, b) => b.date.localeCompare(a.date));
 
-                        if (previousCommonVolume === 0 || currentCommonVolume === 0) continue;
+                    if (previousRecords.length === 0) continue;
 
-                        const growth = ((currentCommonVolume - previousCommonVolume) / previousCommonVolume) * 100;
-                        return { growth, previousDate: date, commonCount: commonExerciseIds.length };
+                    const previousRecord = previousRecords[0];
+                    const previousVolume = calculateVolume(previousRecord.sets);
+
+                    if (previousVolume === 0) continue;
+
+                    totalCurrentVolume += currentVolume;
+                    totalPreviousVolume += previousVolume;
+
+                    // 비교 데이터 저장 (모달에서 사용)
+                    comparisons.push({
+                        exerciseId: currentRecord.exerciseId,
+                        currentRecord: currentRecord,
+                        previousRecord: previousRecord,
+                        currentVolume: currentVolume,
+                        previousVolume: previousVolume,
+                        growth: ((currentVolume - previousVolume) / previousVolume) * 100
+                    });
+
+                    // 가장 최근 비교 날짜 추적
+                    if (!mostRecentComparisonDate || previousRecord.date > mostRecentComparisonDate) {
+                        mostRecentComparisonDate = previousRecord.date;
                     }
                 }
 
-                return null;
+                if (comparisons.length === 0 || totalPreviousVolume === 0) return null;
+
+                const growth = ((totalCurrentVolume - totalPreviousVolume) / totalPreviousVolume) * 100;
+
+                return {
+                    growth,
+                    previousDate: mostRecentComparisonDate,
+                    commonCount: comparisons.length,
+                    comparisons: comparisons
+                };
             };
 
             // 성장률에 따른 메시지 반환
@@ -848,23 +864,38 @@
                                 </button>
                             )}
                         </div>
-                        <button
-                            onClick={() => dateInputRef.current?.showPicker()}
-                            className="p-2"
-                        >
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M2 12C2 8.22876 2 6.34315 3.17157 5.17157C4.34315 4 6.22876 4 10 4H14C17.7712 4 19.6569 4 20.8284 5.17157C22 6.34315 22 8.22876 22 12V14C22 17.7712 22 19.6569 20.8284 20.8284C19.6569 22 17.7712 22 14 22H10C6.22876 22 4.34315 22 3.17157 20.8284C2 19.6569 2 17.7712 2 14V12Z" stroke="#6E6475" strokeWidth="1.5"/>
-                                <path d="M7 4V2.5" stroke="#6E6475" strokeWidth="1.5" strokeLinecap="round"/>
-                                <path d="M17 4V2.5" stroke="#6E6475" strokeWidth="1.5" strokeLinecap="round"/>
-                                <path d="M2.5 9H21.5" stroke="#6E6475" strokeWidth="1.5" strokeLinecap="round"/>
-                                <path d="M18 17C18 17.5523 17.5523 18 17 18C16.4477 18 16 17.5523 16 17C16 16.4477 16.4477 16 17 16C17.5523 16 18 16.4477 18 17Z" fill="#6E6475"/>
-                                <path d="M18 13C18 13.5523 17.5523 14 17 14C16.4477 14 16 13.5523 16 13C16 12.4477 16.4477 12 17 12C17.5523 12 18 12.4477 18 13Z" fill="#6E6475"/>
-                                <path d="M13 17C13 17.5523 12.5523 18 12 18C11.4477 18 11 17.5523 11 17C11 16.4477 11.4477 16 12 16C12.5523 16 13 16.4477 13 17Z" fill="#6E6475"/>
-                                <path d="M13 13C13 13.5523 12.5523 14 12 14C11.4477 14 11 13.5523 11 13C11 12.4477 11.4477 12 12 12C12.5523 12 13 12.4477 13 13Z" fill="#6E6475"/>
-                                <path d="M8 17C8 17.5523 7.55228 18 7 18C6.44772 18 6 17.5523 6 17C6 16.4477 6.44772 16 7 16C7.55228 16 8 16.4477 8 17Z" fill="#6E6475"/>
-                                <path d="M8 13C8 13.5523 7.55228 14 7 14C6.44772 14 6 13.5523 6 13C6 12.4477 6.44772 12 7 12C7.55228 12 8 12.4477 8 13Z" fill="#6E6475"/>
-                            </svg>
-                        </button>
+                        <div className="flex items-center gap-0">
+                            <button
+                                onClick={() => dateInputRef.current?.showPicker()}
+                                className="p-2"
+                            >
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M2 12C2 8.22876 2 6.34315 3.17157 5.17157C4.34315 4 6.22876 4 10 4H14C17.7712 4 19.6569 4 20.8284 5.17157C22 6.34315 22 8.22876 22 12V14C22 17.7712 22 19.6569 20.8284 20.8284C19.6569 22 17.7712 22 14 22H10C6.22876 22 4.34315 22 3.17157 20.8284C2 19.6569 2 17.7712 2 14V12Z" stroke="#6E6475" strokeWidth="1.5"/>
+                                    <path d="M7 4V2.5" stroke="#6E6475" strokeWidth="1.5" strokeLinecap="round"/>
+                                    <path d="M17 4V2.5" stroke="#6E6475" strokeWidth="1.5" strokeLinecap="round"/>
+                                    <path d="M2.5 9H21.5" stroke="#6E6475" strokeWidth="1.5" strokeLinecap="round"/>
+                                    <path d="M18 17C18 17.5523 17.5523 18 17 18C16.4477 18 16 17.5523 16 17C16 16.4477 16.4477 16 17 16C17.5523 16 18 16.4477 18 17Z" fill="#6E6475"/>
+                                    <path d="M18 13C18 13.5523 17.5523 14 17 14C16.4477 14 16 13.5523 16 13C16 12.4477 16.4477 12 17 12C17.5523 12 18 12.4477 18 13Z" fill="#6E6475"/>
+                                    <path d="M13 17C13 17.5523 12.5523 18 12 18C11.4477 18 11 17.5523 11 17C11 16.4477 11.4477 16 12 16C12.5523 16 13 16.4477 13 17Z" fill="#6E6475"/>
+                                    <path d="M13 13C13 13.5523 12.5523 14 12 14C11.4477 14 11 13.5523 11 13C11 12.4477 11.4477 12 12 12C12.5523 12 13 12.4477 13 13Z" fill="#6E6475"/>
+                                    <path d="M8 17C8 17.5523 7.55228 18 7 18C6.44772 18 6 17.5523 6 17C6 16.4477 6.44772 16 7 16C7.55228 16 8 16.4477 8 17Z" fill="#6E6475"/>
+                                    <path d="M8 13C8 13.5523 7.55228 14 7 14C6.44772 14 6 13.5523 6 13C6 12.4477 6.44772 12 7 12C7.55228 12 8 12.4477 8 13Z" fill="#6E6475"/>
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (dateRecords.length > 1) {
+                                        setEditingRecordIds(dateRecords.map(r => r.id));
+                                        setShowOrderModal(true);
+                                    }
+                                }}
+                                className="p-2"
+                            >
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M4 6H20M4 12.5H20M4 19H20" stroke="#6E6475" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
                         <input
                             ref={dateInputRef}
                             type="date"
@@ -877,7 +908,9 @@
 
                     {/* 루틴 성장률 */}
                     {routineGrowth && (
-                        <div className={`mb-4 p-4 rounded-lg border ${
+                        <div
+                            onClick={() => setShowGrowthDetailModal(true)}
+                            className={`mb-4 p-4 rounded-lg border cursor-pointer ${
                             routineGrowth.growth > 0
                                 ? 'bg-[#FAFFFB] border-[#78D2A8]'
                                 : routineGrowth.growth === 0
@@ -931,23 +964,8 @@
                             return (
                                 <div key={record.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                                     {/* 운동 헤더 */}
-                                    <div
-                                        className="flex items-center mb-3"
-                                        onMouseDown={handleLongPressStart}
-                                        onMouseUp={handleLongPressEnd}
-                                        onMouseLeave={handleLongPressEnd}
-                                        onTouchStart={handleLongPressStart}
-                                        onTouchEnd={handleLongPressEnd}
-                                    >
-                                        <h3 className="text-lg font-bold text-gray-800">{exercise.name}</h3>
-                                        <button
-                                            onClick={() => deleteRecord(record.id)}
-                                            className="ml-2"
-                                        >
-                                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M13.75 10C13.75 10.1658 13.6842 10.3247 13.5669 10.4419C13.4497 10.5592 13.2908 10.625 13.125 10.625H6.875C6.70924 10.625 6.55027 10.5592 6.43306 10.4419C6.31585 10.3247 6.25 10.1658 6.25 10C6.25 9.83424 6.31585 9.67527 6.43306 9.55806C6.55027 9.44085 6.70924 9.375 6.875 9.375H13.125C13.2908 9.375 13.4497 9.44085 13.5669 9.55806C13.6842 9.67527 13.75 9.83424 13.75 10ZM18.125 10C18.125 11.607 17.6485 13.1779 16.7557 14.514C15.8629 15.8502 14.594 16.8916 13.1093 17.5065C11.6247 18.1215 9.99099 18.2824 8.41489 17.9689C6.8388 17.6554 5.39106 16.8815 4.25476 15.7452C3.11846 14.6089 2.34463 13.1612 2.03112 11.5851C1.71762 10.009 1.87852 8.37535 2.49348 6.8907C3.10844 5.40605 4.14985 4.1371 5.486 3.24431C6.82214 2.35152 8.39303 1.875 10 1.875C12.1542 1.87727 14.2195 2.73403 15.7427 4.25727C17.266 5.78051 18.1227 7.84581 18.125 10ZM16.875 10C16.875 8.64025 16.4718 7.31104 15.7164 6.18045C14.9609 5.04987 13.8872 4.16868 12.631 3.64833C11.3747 3.12798 9.99238 2.99183 8.65876 3.2571C7.32514 3.52237 6.10013 4.17715 5.13864 5.13864C4.17716 6.10013 3.52238 7.32513 3.2571 8.65875C2.99183 9.99237 3.12798 11.3747 3.64833 12.6309C4.16868 13.8872 5.04987 14.9609 6.18046 15.7164C7.31105 16.4718 8.64026 16.875 10 16.875C11.8227 16.8729 13.5702 16.1479 14.8591 14.8591C16.1479 13.5702 16.8729 11.8227 16.875 10Z" fill="#C1BBC3"/>
-                                            </svg>
-                                        </button>
+                                    <div className="flex items-center mb-3 gap-2 min-w-0">
+                                        <h3 className="text-lg font-bold text-gray-800 truncate shrink min-w-0">{exercise.name}</h3>
                                         {(() => {
                                             // 현재 난이도가 있으면 표시 (보라색 - 사용자가 선택함)
                                             if (record.difficulty) {
@@ -958,9 +976,9 @@
                                                             setSelectedRecordForDifficulty(record);
                                                             setShowDifficultyModal(true);
                                                         }}
-                                                        className="ml-auto flex items-center gap-1 pl-1 pr-1.5 bg-white rounded-full border border-[#A295D5] text-[#A295D5] cursor-pointer hover:opacity-80"
+                                                        className="ml-auto flex items-center gap-1 pl-1 pr-1.5 bg-white rounded-full border border-[#A295D5] text-[#A295D5] cursor-pointer hover:opacity-80 shrink-0"
                                                         style={{height: '28px'}}
-                                                        dangerouslySetInnerHTML={{__html: diffInfo.icon + '<span class="text-sm font-normal">' + diffInfo.text + '</span>'}}
+                                                        dangerouslySetInnerHTML={{__html: diffInfo.icon + '<span class="text-sm font-normal max-[450px]:hidden">' + diffInfo.text + '</span>'}}
                                                     />
                                                 );
                                             } else {
@@ -977,9 +995,9 @@
                                                                 setSelectedRecordForDifficulty(record);
                                                                 setShowDifficultyModal(true);
                                                             }}
-                                                            className="ml-auto flex items-center gap-1 pl-1 pr-1.5 bg-white rounded-full border border-gray-200 text-gray-400 cursor-pointer hover:opacity-80"
+                                                            className="ml-auto flex items-center gap-1 pl-1 pr-1.5 bg-white rounded-full border border-gray-200 text-gray-400 cursor-pointer hover:opacity-80 shrink-0"
                                                             style={{height: '28px'}}
-                                                            dangerouslySetInnerHTML={{__html: diffInfo.icon + '<span class="text-sm font-normal">' + diffInfo.text + '</span>'}}
+                                                            dangerouslySetInnerHTML={{__html: diffInfo.icon + '<span class="text-sm font-normal max-[450px]:hidden">' + diffInfo.text + '</span>'}}
                                                         />
                                                     );
                                                 } else {
@@ -990,10 +1008,10 @@
                                                                 setSelectedRecordForDifficulty(record);
                                                                 setShowDifficultyModal(true);
                                                             }}
-                                                            className="ml-auto flex items-center gap-1 px-2 bg-white rounded-full border border-gray-300 text-gray-400 cursor-pointer hover:border-gray-400 hover:text-gray-500"
+                                                            className="ml-auto flex items-center gap-1 px-2 bg-white rounded-full border border-gray-300 text-gray-400 cursor-pointer hover:border-gray-400 hover:text-gray-500 shrink-0"
                                                             style={{height: '28px'}}
                                                         >
-                                                            <span className="text-sm font-normal">난이도</span>
+                                                            <span className="text-sm font-normal max-[450px]:hidden">난이도</span>
                                                         </button>
                                                     );
                                                 }
@@ -1002,7 +1020,7 @@
                                         {growth && (
                                             <button
                                                 onClick={() => setSelectedExercise(exercise)}
-                                                className={`ml-2 flex items-center px-1 py-0.5 rounded-full border cursor-pointer hover:opacity-80 ${
+                                                className={`ml-2 flex items-center px-1 py-0.5 rounded-full border cursor-pointer hover:opacity-80 shrink-0 ${
                                                 growth.growth > 0
                                                     ? 'bg-[#FAFFFB] border-[#78D2A8] text-[#2D9C61]'
                                                     : growth.growth === 0
@@ -1174,7 +1192,26 @@
                                                 <div className="font-medium text-gray-800">{exercise.name}</div>
                                                 <div className="text-xs text-gray-500">{exercise.tag}</div>
                                             </div>
-                                            <div className="text-2xl text-gray-400">☰</div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm(`"${exercise.name}" 운동을 삭제하시겠습니까?`)) {
+                                                        deleteRecord(recordId);
+                                                        setEditingRecordIds(editingRecordIds.filter(id => id !== recordId));
+                                                        if (editingRecordIds.length <= 2) {
+                                                            setShowOrderModal(false);
+                                                        }
+                                                    }
+                                                }}
+                                                className="p-2 hover:bg-gray-200 rounded"
+                                            >
+                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M13.75 10C13.75 10.1658 13.6842 10.3247 13.5669 10.4419C13.4497 10.5592 13.2908 10.625 13.125 10.625H6.875C6.70924 10.625 6.55027 10.5592 6.43306 10.4419C6.31585 10.3247 6.25 10.1658 6.25 10C6.25 9.83424 6.31585 9.67527 6.43306 9.55806C6.55027 9.44085 6.70924 9.375 6.875 9.375H13.125C13.2908 9.375 13.4497 9.44085 13.5669 9.55806C13.6842 9.67527 13.75 9.83424 13.75 10ZM18.125 10C18.125 11.607 17.6485 13.1779 16.7557 14.514C15.8629 15.8502 14.594 16.8916 13.1093 17.5065C11.6247 18.1215 9.99099 18.2824 8.41489 17.9689C6.8388 17.6554 5.39106 16.8815 4.25476 15.7452C3.11846 14.6089 2.34463 13.1612 2.03112 11.5851C1.71762 10.009 1.87852 8.37535 2.49348 6.8907C3.10844 5.40605 4.14985 4.1371 5.486 3.24431C6.82214 2.35152 8.39303 1.875 10 1.875C12.1542 1.87727 14.2195 2.73403 15.7427 4.25727C17.266 5.78051 18.1227 7.84581 18.125 10ZM16.875 10C16.875 8.64025 16.4718 7.31104 15.7164 6.18045C14.9609 5.04987 13.8872 4.16868 12.631 3.64833C11.3747 3.12798 9.99238 2.99183 8.65876 3.2571C7.32514 3.52237 6.10013 4.17715 5.13864 5.13864C4.17716 6.10013 3.52238 7.32513 3.2571 8.65875C2.99183 9.99237 3.12798 11.3747 3.64833 12.6309C4.16868 13.8872 5.04987 14.9609 6.18046 15.7164C7.31105 16.4718 8.64026 16.875 10 16.875C11.8227 16.8729 13.5702 16.1479 14.8591 14.8591C16.1479 13.5702 16.8729 11.8227 16.875 10Z" fill="#C1BBC3"/>
+                                                </svg>
+                                            </button>
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M4 6H20M4 12.5H20M4 19H20" stroke="#6E6475" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
                                         </div>
                                     );
                                 })}
@@ -1224,7 +1261,9 @@
                         const previousDifficulty = previousRecord?.difficulty;
 
                         const handleDifficultySelect = (difficulty) => {
-                            updateRecord(selectedRecordForDifficulty.id, { ...selectedRecordForDifficulty, difficulty });
+                            // 같은 난이도를 클릭하면 선택 해제
+                            const newDifficulty = selectedRecordForDifficulty.difficulty === difficulty ? null : difficulty;
+                            updateRecord(selectedRecordForDifficulty.id, { ...selectedRecordForDifficulty, difficulty: newDifficulty });
                             setShowDifficultyModal(false);
                             setSelectedRecordForDifficulty(null);
                         };
@@ -1277,6 +1316,55 @@
                             </Modal>
                         );
                     })()}
+
+                    {/* 성장률 상세 모달 */}
+                    {showGrowthDetailModal && routineGrowth && (
+                        <Modal onClose={() => setShowGrowthDetailModal(false)} title={<span className="text-gray-800">성장률 상세</span>}>
+                            <div className="space-y-4">
+                                {/* 운동별 비교 */}
+                                <div className="space-y-4">
+                                    {routineGrowth.comparisons.map((comparison, index) => {
+                                        const exercise = exercises.find(e => e.id === comparison.exerciseId);
+                                        if (!exercise) return null;
+
+                                        return (
+                                            <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
+                                                {/* 운동 이름과 성장률 */}
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h4 className="font-bold text-gray-800">{exercise.name} ({formatDateKorean(comparison.previousRecord.date)})</h4>
+                                                    <span className={`text-base font-bold ${
+                                                        comparison.growth > 0
+                                                            ? 'text-[#2D9C61]'
+                                                            : comparison.growth === 0
+                                                                ? 'text-[#847DC4]'
+                                                                : 'text-[#E75D7DCC]'
+                                                    }`}>
+                                                        {comparison.growth >= 0 ? '+' : ''}{comparison.growth.toFixed(1)}%
+                                                    </span>
+                                                </div>
+
+                                                {/* 과거 기록 */}
+                                                <div>
+                                                    <div className="bg-gray-50 p-3 rounded-lg">
+                                                        <div className="space-y-1 mb-2">
+                                                            {comparison.previousRecord.sets.map((set, setIndex) => (
+                                                                <div key={setIndex} className="text-sm text-gray-700">
+                                                                    세트 {setIndex + 1}: {set.weight}kg × {set.reps}회
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="text-sm text-gray-500 font-medium">
+                                                            총 볼륨: {comparison.previousVolume.toLocaleString()}kg
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
 
                     {/* 키보드를 위한 스크롤 여백 */}
                     {/* 커스텀 키보드 */}
