@@ -962,9 +962,31 @@
                             const growth = getExerciseGrowth(exercise.id);
 
                             return (
-                                <div key={record.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                                <div key={record.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm relative">
+                                    {/* 성장률 뱃지 - 우측 상단 고정 */}
+                                    {growth && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedExercise(exercise);
+                                            }}
+                                            className={`absolute top-4 right-4 flex items-center px-1 py-0.5 rounded-full border cursor-pointer hover:opacity-80 shrink-0 ${
+                                            growth.growth > 0
+                                                ? 'bg-[#FAFFFB] border-[#78D2A880] text-[#2D9C61]'
+                                                : growth.growth === 0
+                                                    ? 'bg-[#F3F1FA] border-[#D4CDEB80] text-[#847DC4]'
+                                                    : 'bg-[#FFF9FA] border-[#F06B8A80] text-[#E75D7DCC]'
+                                        }`}
+                                            style={{height: '28px'}}
+                                        >
+                                            <span className="text-sm font-bold">
+                                                {growth.growth >= 0 ? '+' : ''}{growth.growth.toFixed(1)}%
+                                            </span>
+                                        </button>
+                                    )}
+
                                     {/* 운동 헤더 */}
-                                    <div className="flex items-center mb-3 gap-2 min-w-0">
+                                    <div className="flex items-center mb-3 gap-2 min-w-0 pr-16">
                                         <button
                                             onClick={() => {
                                                 setSelectedRecordForDifficulty(record);
@@ -985,9 +1007,9 @@
                                                             setSelectedRecordForDifficulty(record);
                                                             setShowDifficultyModal(true);
                                                         }}
-                                                        className="ml-auto flex items-center gap-1 pl-1 pr-1.5 bg-white rounded-full border border-[#A295D5] text-[#A295D5] cursor-pointer hover:opacity-80 shrink-0"
-                                                        style={{height: '28px'}}
-                                                        dangerouslySetInnerHTML={{__html: diffInfo.icon + '<span class="text-sm font-normal max-[450px]:hidden">' + diffInfo.text + '</span>'}}
+                                                        className="ml-auto flex items-center gap-1 px-2 py-1 font-medium rounded-full cursor-pointer hover:opacity-80 shrink-0"
+                                                        style={{color: 'rgb(162, 149, 213)', backgroundColor: 'rgba(162, 149, 213, 0.1)', height: '28px'}}
+                                                        dangerouslySetInnerHTML={{__html: diffInfo.icon + '<span class="text-sm font-normal">' + diffInfo.text + '</span>'}}
                                                     />
                                                 );
                                             } else {
@@ -1005,9 +1027,9 @@
                                                                 setSelectedRecordForDifficulty(record);
                                                                 setShowDifficultyModal(true);
                                                             }}
-                                                            className="ml-auto flex items-center gap-1 pl-1 pr-1.5 bg-white rounded-full border border-gray-200 text-gray-400 cursor-pointer hover:opacity-80 shrink-0"
-                                                            style={{height: '28px'}}
-                                                            dangerouslySetInnerHTML={{__html: diffInfo.icon + '<span class="text-sm font-normal max-[450px]:hidden">' + diffInfo.text + '</span>'}}
+                                                            className="ml-auto flex items-center gap-1 px-2 py-1 font-medium rounded-full cursor-pointer hover:opacity-80 shrink-0"
+                                                            style={{color: 'rgb(156, 163, 175)', backgroundColor: 'rgba(156, 163, 175, 0.1)', height: '28px'}}
+                                                            dangerouslySetInnerHTML={{__html: diffInfo.icon + '<span class="text-sm font-normal">' + diffInfo.text + '</span>'}}
                                                         />
                                                     );
                                                 } else {
@@ -1016,26 +1038,6 @@
                                                 }
                                             }
                                         })()}
-                                        {growth && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedExercise(exercise);
-                                                }}
-                                                className={`ml-2 flex items-center px-1 py-0.5 rounded-full border cursor-pointer hover:opacity-80 shrink-0 ${
-                                                growth.growth > 0
-                                                    ? 'bg-[#FAFFFB] border-[#78D2A8] text-[#2D9C61]'
-                                                    : growth.growth === 0
-                                                        ? 'bg-[#F3F1FA] border-[#D4CDEB] text-[#847DC4]'
-                                                        : 'bg-[#FFF9FA] border-[#F06B8ACC] text-[#E75D7DCC]'
-                                            }`}
-                                                style={{height: '28px'}}
-                                            >
-                                                <span className="text-sm font-bold">
-                                                    {growth.growth >= 0 ? '+' : ''}{growth.growth.toFixed(1)}%
-                                                </span>
-                                            </button>
-                                        )}
                                         {!growth && (
                                             <div className="ml-auto"></div>
                                         )}
@@ -1271,22 +1273,41 @@
                         };
 
                         return (
-                            <Modal onClose={() => { setShowDifficultyModal(false); setSelectedRecordForDifficulty(null); }} title={<span className="text-gray-800">운동 난이도</span>}>
+                            <Modal onClose={() => { setShowDifficultyModal(false); setSelectedRecordForDifficulty(null); }} title={
+                                <div className="flex items-center justify-between w-full">
+                                    <span className="text-gray-800">{exercise.name}</span>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteRecord(selectedRecordForDifficulty.id);
+                                            setShowDifficultyModal(false);
+                                            setSelectedRecordForDifficulty(null);
+                                        }}
+                                        className="p-2 hover:bg-gray-200 rounded"
+                                    >
+                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M13.75 10C13.75 10.1658 13.6842 10.3247 13.5669 10.4419C13.4497 10.5592 13.2908 10.625 13.125 10.625H6.875C6.70924 10.625 6.55027 10.5592 6.43306 10.4419C6.31585 10.3247 6.25 10.1658 6.25 10C6.25 9.83424 6.31585 9.67527 6.43306 9.55806C6.55027 9.44085 6.70924 9.375 6.875 9.375H13.125C13.2908 9.375 13.4497 9.44085 13.5669 9.55806C13.6842 9.67527 13.75 9.83424 13.75 10ZM18.125 10C18.125 11.607 17.6485 13.1779 16.7557 14.514C15.8629 15.8502 14.594 16.8916 13.1093 17.5065C11.6247 18.1215 9.99099 18.2824 8.41489 17.9689C6.8388 17.6554 5.39106 16.8815 4.25476 15.7452C3.11846 14.6089 2.34463 13.1612 2.03112 11.5851C1.71762 10.009 1.87852 8.37535 2.49348 6.8907C3.10844 5.40605 4.14985 4.1371 5.486 3.24431C6.82214 2.35152 8.39303 1.875 10 1.875C12.1542 1.87727 14.2195 2.73403 15.7427 4.25727C17.266 5.78051 18.1227 7.84581 18.125 10ZM16.875 10C16.875 8.64025 16.4718 7.31104 15.7164 6.18045C14.9609 5.04987 13.8872 4.16868 12.631 3.64833C11.3747 3.12798 9.99238 2.99183 8.65876 3.2571C7.32514 3.52237 6.10013 4.17715 5.13864 5.13864C4.17716 6.10013 3.52238 7.32513 3.2571 8.65875C2.99183 9.99237 3.12798 11.3747 3.64833 12.6309C4.16868 13.8872 5.04987 14.9609 6.18046 15.7164C7.31105 16.4718 8.64026 16.875 10 16.875C11.8227 16.8729 13.5702 16.1479 14.8591 14.8591C16.1479 13.5702 16.8729 11.8227 16.875 10Z" fill="#C1BBC3"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            }>
                                 <div className="space-y-4">
                                     {/* 지난 난이도 */}
-                                    {previousDifficulty && (() => {
-                                        const prevInfo = getDifficultyInfo(previousDifficulty);
-                                        return (
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-sm text-gray-500">지난 난이도:</span>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-sm text-gray-500">지난 난이도:</span>
+                                        {previousDifficulty ? (() => {
+                                            const prevInfo = getDifficultyInfo(previousDifficulty);
+                                            return (
                                                 <div
                                                     className="flex items-center gap-1 pl-1 pr-1.5 bg-white rounded-full border border-gray-200 text-gray-400"
                                                     style={{height: '28px'}}
                                                     dangerouslySetInnerHTML={{__html: prevInfo.icon + '<span class="text-sm font-normal">' + prevInfo.text + '</span>'}}
                                                 />
-                                            </div>
-                                        );
-                                    })()}
+                                            );
+                                        })() : (
+                                            <span className="text-sm text-gray-400">없음</span>
+                                        )}
+                                    </div>
 
                                     {/* 난이도 선택 버튼 */}
                                     <div className="space-y-3">
@@ -1332,8 +1353,13 @@
                                         return (
                                             <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
                                                 {/* 운동 이름과 성장률 */}
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <h4 className="font-bold text-gray-800">{exercise.name} ({formatDateKorean(comparison.previousRecord.date)})</h4>
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <h4 className="font-bold text-gray-800">{exercise.name}</h4>
+                                                        <div className="text-xs text-gray-500 mt-1">
+                                                            vs {formatDateKorean(comparison.previousRecord.date)}
+                                                        </div>
+                                                    </div>
                                                     <span className={`text-base font-bold ${
                                                         comparison.growth > 0
                                                             ? 'text-[#2D9C61]'
@@ -2304,7 +2330,7 @@
                             ))}
                         </div>
 
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                        <div className="space-y-2 h-[60vh] overflow-y-auto">
                             {filteredExercises.map(exercise => (
                                 <button
                                     key={exercise.id}
